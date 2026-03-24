@@ -183,28 +183,38 @@ export default function ProfilePage() {
   /* Real-time chat messages from Firestore (for visitors) */
   useEffect(() => {
     if (isOwnProfile || !profileData?.uid) return;
+    
+    // Clear messages immediately for visitors
+    setMessages([]);
+    
     const chatId = profileData.uid;
     const msgsRef = collection(db, 'chats', chatId, 'messages');
     const q = query(msgsRef, orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMsgs = snapshot.docs.map((d) => {
-        const data = d.data();
-        const ts = data.createdAt?.toDate?.() || new Date();
-        return {
-          id: d.id,
-          sender: data.sender || 'Anoniem',
-          senderUid: data.senderUid || null,
-          text: data.text || '',
-          time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
-          createdAt: ts,
-        } as ChatMsg;
-      });
+      const now = new Date();
+      const newMsgs = snapshot.docs
+        .map((d) => {
+          const data = d.data();
+          const ts = data.createdAt?.toDate?.() || new Date();
+          return {
+            id: d.id,
+            sender: data.sender || 'Anoniem',
+            senderUid: data.senderUid || null,
+            text: data.text || '',
+            time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
+            createdAt: ts,
+          } as ChatMsg;
+        })
+        // Only show messages from the last 5 minutes for visitors
+        .filter((msg) => (now.getTime() - msg.createdAt.getTime()) < 5 * 60 * 1000);
       setMessages(newMsgs);
       
       // Auto-create conversation when visitor sends message
       if (newMsgs.length > 0) {
         const lastMsg = newMsgs[newMsgs.length - 1];
-        ensureConversation(lastMsg.sender, lastMsg.senderUid || '');
+        if (lastMsg.senderUid) {
+          ensureConversation(lastMsg.sender, lastMsg.senderUid);
+        }
       }
     });
     return () => unsubscribe();
@@ -261,7 +271,9 @@ export default function ProfilePage() {
   /* Create conversation when visitor sends first message */
   async function ensureConversation(senderName: string, senderUid: string) {
     if (!profileData?.uid) return;
-    const anonId = senderUid === user?.uid ? user.uid : senderUid;
+    
+    // Use the senderUid as the anonId for tracking
+    const anonId = senderUid;
     const convRef = collection(db, 'users', profileData.uid, 'conversations');
     const q = query(convRef, where('anonId', '==', anonId));
     const snap = await getDocs(q);
