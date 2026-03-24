@@ -189,7 +189,7 @@ export default function ProfilePage() {
     
     const chatId = profileData.uid;
     const msgsRef = collection(db, 'chats', chatId, 'messages');
-    const sessionStart = Date.now(); // Track session start timestamp
+    const sessionStart = new Date(); // Track session start
     
     const q = query(msgsRef, orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -207,7 +207,9 @@ export default function ProfilePage() {
           } as ChatMsg;
         })
         // Only show messages sent AFTER visitor opened the page
-        .filter((msg) => msg.createdAt.getTime() >= sessionStart);
+        .filter((msg) => msg.createdAt > sessionStart)
+        // Additional safety: only show messages from the last 30 seconds
+        .filter((msg) => (Date.now() - msg.createdAt.getTime()) < 30000);
       setMessages(newMsgs);
       
       // Auto-create conversation when visitor sends message
