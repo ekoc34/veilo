@@ -223,42 +223,31 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [isOwnProfile, profileData?.uid]);
 
-  /* Profile owner also listens to visitor messages for real-time updates */
+  /* Profile owner: directly listen to chats/{uid}/messages for real-time visitor messages */
   useEffect(() => {
     if (!isOwnProfile || !profileData?.uid) return;
     
     const chatId = profileData.uid;
     const msgsRef = collection(db, 'chats', chatId, 'messages');
     
-    const q = query(msgsRef, orderBy('createdAt', 'desc'), limit(50));
+    const q = query(msgsRef, orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          const ts = data.createdAt?.toDate?.() || new Date();
-          const newMsg: ChatMsg = {
-            id: change.doc.id,
-            sender: data.sender || 'Anoniem',
-            senderUid: data.senderUid || null,
-            text: data.text || '',
-            time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
-            createdAt: ts,
-          };
-          
-          // Add message to active conversation or create new one
-          if (newMsg.senderUid) {
-            ensureConversation(newMsg.sender, newMsg.senderUid).then((convId) => {
-              if (convId && (!activeConvId || activeConvId === convId)) {
-                setActiveConvId(convId);
-                // Trigger message refresh for this conversation
-              }
-            });
-          }
-        }
+      const allMsgs = snapshot.docs.map((d) => {
+        const data = d.data();
+        const ts = data.createdAt?.toDate?.() || new Date();
+        return {
+          id: d.id,
+          sender: data.sender || 'Anoniem',
+          senderUid: data.senderUid || null,
+          text: data.text || '',
+          time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
+          createdAt: ts,
+        } as ChatMsg;
       });
+      setMessages(allMsgs);
     });
     return () => unsubscribe();
-  }, [isOwnProfile, profileData?.uid, activeConvId]);
+  }, [isOwnProfile, profileData?.uid]);
 
   /* Clear messages when page closes (for visitors) */
   useEffect(() => {
@@ -273,12 +262,11 @@ export default function ProfilePage() {
   async function sendMessage() {
     if (!message.trim() || !profileData?.uid) return;
     
-    // Prevent self-messaging on own profile
+    // Profile owner replies into the same chats/{uid}/messages collection
     if (isOwnProfile) {
-      if (!activeConvId) return;
       const senderName = myProfile?.name || 'Eigenaar';
       try {
-        await addDoc(collection(db, 'users', profileData.uid, 'conversations', activeConvId, 'messages'), {
+        await addDoc(collection(db, 'chats', profileData.uid, 'messages'), {
           sender: senderName,
           senderUid: user?.uid,
           text: message,
@@ -413,42 +401,6 @@ export default function ProfilePage() {
             {/* Show full navigation when viewing own profile */}
             {isOwnProfile && (
               <>
-                <li>
-                  <a href="#" className="nav-btn nav-groups">
-                    <img src="/images/icon-groups.svg" alt="" />
-                    Groepen
-                  </a>
-                </li>
-                <li>
-                  <a className="nav-btn nav-popular" onClick={() => setShowPopular(true)} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-popular.svg" alt="" />
-                    Populairen
-                  </a>
-                </li>
-                <li>
-                  <a className="nav-btn nav-following" onClick={() => setShowFollowing(true)} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-following.svg" alt="" />
-                    Volglijst
-                  </a>
-                </li>
-                <li>
-                  <a className="nav-btn nav-messages" onClick={() => setShowMessages(true)} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-messages.svg" alt="" />
-                    Berichten
-                  </a>
-                </li>
-                <li>
-                  <a className="nav-btn nav-settings" onClick={() => { setShowSettings(true); setSettingsTab('general'); }} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-settings.svg" alt="" />
-                    Instellingen
-                  </a>
-                </li>
-                <li>
-                  <a onClick={logout} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-logout.svg" alt="" />
-                    Uitloggen
-                  </a>
-                </li>
                 {user && (
                   <li className="nav-hint-wrap">
                     <a className="nav-btn nav-user">
@@ -474,9 +426,44 @@ export default function ProfilePage() {
                     </div>
                   </li>
                 )}
+                <li>
+                  <a onClick={logout} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-logout.svg" alt="" />
+                    Uitloggen
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-settings" onClick={() => { setShowSettings(true); setSettingsTab('general'); }} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-settings.svg" alt="" />
+                    Instellingen
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-messages" onClick={() => setShowMessages(true)} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-messages.svg" alt="" />
+                    Berichten
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-following" onClick={() => setShowFollowing(true)} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-following.svg" alt="" />
+                    Volglijst
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-popular" onClick={() => setShowPopular(true)} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-popular.svg" alt="" />
+                    Populairen
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="nav-btn nav-groups">
+                    <img src="/images/icon-groups.svg" alt="" />
+                    Groepen
+                  </a>
+                </li>
               </>
             )}
-            {/* Always show speaker icon at the very end */}
             <li>
               <a className="nav-btn nav-sound" onClick={() => setSoundOn(!soundOn)} style={{ cursor: 'pointer' }}>
                 <img src="/images/icon-sound.svg" alt="" />
