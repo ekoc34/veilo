@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   VEILO Global Styles - Faithful to Ribony.com original design
+   ============================================================ */
+
+/* --- Base Reset --- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { margin: 0; padding: 0; font-family: 'Roboto Condensed', 'Roboto', sans-serif; background: #222; overflow-x: hidden; }
+a, a:hover { text-decoration: none; color: #005EA3; }
+img { border: none; }
+input { outline: none; }
+button { border: none; outline: none; cursor: pointer; }
+ul { list-style-type: none; padding: 0; margin: 0; }
+
+/* --- Placeholder --- */
+::placeholder { font-size: 13px; color: #A3A3A3; }
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #222; }
+::-webkit-scrollbar-thumb { background: #7C4DFF; border-radius: 3px; }

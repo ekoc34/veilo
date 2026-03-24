@@ -1,0 +1,825 @@
+/* ============================================================
+   VEILO Homepage Styles – Faithful replica of Ribony.com
+   ============================================================ */
+
+/* --- Background Gradient (exact Ribony dark-violet radial) --- */
+#gradient {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  opacity: 0.9;
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  background: rgba(26,26,46,1);
+  background: -webkit-radial-gradient(center, ellipse cover, rgba(26,26,46,1) 0%, rgba(55,45,90,1) 50%, rgba(12,12,12,1) 100%);
+  background: radial-gradient(ellipse at center, rgba(26,26,46,1) 0%, rgba(55,45,90,1) 50%, rgba(12,12,12,1) 100%);
+}
+
+/* --- Main Content Container --- */
+.hcontent {
+  width: 1180px;
+  margin: 0 auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 999;
+}
+
+/* --- Header --- */
+.header {
+  width: 100%;
+  height: 112px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+}
+
+.header input[type=text],
+.header input[type=password] {
+  float: left;
+  width: 160px;
+  transition-duration: 0.3s;
+  background: none;
+  margin: 26px 18px 0 0;
+  border: 1px solid #CFD0E2;
+  border-radius: 500px;
+  height: 36px;
+  line-height: 36px;
+  padding-left: 10px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.header input[type=text]:focus,
+.header input[type=password]:focus {
+  border: 1px solid #fff;
+}
+
+.header p {
+  float: left;
+  color: #B39DDB;
+  font-size: 13px;
+  display: block;
+  height: 112px;
+  line-height: 92px;
+  margin-right: 16px;
+}
+
+.header input[type=submit] {
+  height: 36px;
+  line-height: 35px;
+  float: left;
+  outline: none;
+  margin: 26px 0 0 10px;
+  background: #7C4DFF;
+  color: #fff;
+  font-size: 14px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 500px;
+  cursor: pointer;
+}
+
+.header input[type=submit]:hover {
+  background: #8E24AA;
+}
+
+.header span a {
+  float: right;
+  display: block;
+  outline: none;
+  margin-top: -50px;
+  margin-right: 100px;
+  color: #fff;
+}
+
+.header span a:hover {
+  text-decoration: underline;
+}
+
+.login-error-msg {
+  float: right;
+  display: block;
+  margin-top: -50px;
+  margin-right: 370px;
+  font-weight: 300;
+  color: #FF9191;
+  transition: opacity 0.3s;
+}
+
+.logo a {
+  width: 137px;
+  height: 45px;
+  float: left;
+  margin: 30px 0 0 0;
+  display: block;
+  background: url('/images/veilo-logo.svg') no-repeat;
+  background-size: contain;
+}
+
+.logins {
+  height: 112px;
+  width: 590px;
+  float: right;
+  overflow: hidden;
+}
+
+/* --- Home Left --- */
+.home_left {
+  width: 740px;
+  position: absolute;
+  left: 0;
+  top: 120px;
+  z-index: 0;
+}
+
+.home_left h3 {
+  font-weight: 600;
+  width: 100%;
+  font-size: 52px;
+  margin: 0;
+  color: #fff;
+}
+
+.home_left > p {
+  font-weight: 300;
+  float: left;
+  width: 90%;
+  font-size: 20px;
+  color: #fff;
+  margin-bottom: 20px;
+  overflow: hidden;
+  margin-top: 10px;
+  display: block;
+}
+
+/* --- Popular User Card --- */
+.home_pop {
+  width: 172px;
+  margin-top: 2px;
+  overflow: hidden;
+  position: relative;
+  height: 214px;
+  float: left;
+}
+
+.home_pop img {
+  width: 100%;
+  display: block;
+  transition-duration: 0.4s;
+}
+
+.home_pop:hover img {
+  transform: scale(1.1);
+}
+
+.home_pop div {
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  z-index: 44;
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
+}
+
+.home_pop h3 {
+  width: 100%;
+  padding: 0 10px;
+  overflow: hidden;
+  bottom: 35px;
+  color: #fff;
+  position: absolute;
+  left: 0;
+  z-index: 44;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.home_pop p {
+  width: 100%;
+  padding: 0 10px;
+  display: block;
+  overflow: hidden;
+  bottom: 2px;
+  color: #fff;
+  position: absolute;
+  left: 0;
+  z-index: 555;
+  font-size: 13px;
+  font-weight: 300;
+}
+
+.home_pop div strong {
+  display: block;
+  margin: 10px 10px 0 0;
+  float: right;
+  font-size: 12px;
+  background: #FF9326;
+  color: #fff;
+  font-weight: 600;
+  height: 20px;
+  line-height: 21px;
+  padding: 0 12px;
+}
+
+/* --- User Grid --- */
+.home_pop_list {
+  width: 560px;
+  float: right;
+}
+
+.home_pop_list ul li {
+  display: block;
+  float: left;
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.home_pop_list ul li img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition-duration: 0.5s;
+  position: absolute;
+  z-index: 44;
+  left: 0;
+  top: 0;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.home_pop_list ul li:hover img {
+  opacity: 1;
+  padding: 3px;
+  background: #fff;
+}
+
+/* --- Slogan Holder (Ribony-style slide-up) --- */
+#holder {
+  position: relative;
+  width: 100%;
+  user-select: none;
+  color: #fff;
+  float: left;
+  height: 50px;
+  overflow: hidden;
+  margin: 10px 0 0 0;
+}
+
+#slogans {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+p.slogan {
+  text-rendering: optimizeLegibility;
+  margin: 0;
+  font-size: 32px;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: transform 0.5s ease, opacity 0.5s ease;
+}
+
+p.slogan strong {
+  display: block;
+  width: 100%;
+  font-weight: 700;
+}
+
+/* Active slogan: visible in place */
+p.slogan.slogan-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Exiting slogan: slides up and fades out */
+p.slogan.slogan-exit {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+
+/* Hidden slogans: below, invisible */
+p.slogan.slogan-hidden {
+  opacity: 0;
+  transform: translateY(100%);
+  transition: none;
+}
+
+/* --- Search Forms --- */
+.hforms {
+  width: 100%;
+  padding-right: 40px;
+  height: 54px;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.hforms input[type=text] {
+  float: right;
+  width: 250px;
+  transition-duration: 0.3s;
+  background: #fff;
+  border: none;
+  margin: 2px 10px 0 0;
+  height: 32px;
+  line-height: 32px;
+  padding-left: 10px;
+  font-size: 13px;
+  color: #A4A4A4;
+  border-radius: 5px;
+}
+
+.refreshh {
+  height: 32px;
+  width: 32px;
+  cursor: pointer;
+  line-height: 32px;
+  float: right;
+  outline: none;
+  border: none;
+  margin: 2px 18px 0 0;
+  background: #6CA765;
+  color: #fff;
+  font-size: 16px;
+  text-align: center;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.refreshh:hover {
+  background: #5E9957;
+}
+
+.htags {
+  float: right;
+  transition-duration: 0.3s;
+  font-weight: 500;
+  background: #F3F3F5;
+  border: none;
+  margin: 2px 10px 0 0;
+  height: 32px;
+  line-height: 32px;
+  padding: 0 15px;
+  font-size: 14px;
+  color: #2692FF;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+}
+
+.hsil {
+  height: 32px;
+  transition-duration: 0.4s;
+  line-height: 32px;
+  padding: 0 0 0 5px;
+  cursor: pointer;
+  color: #8D8D8D;
+  font-size: 13px;
+}
+
+.hsil:hover {
+  color: #333;
+}
+
+/* --- Facebook Login Button (exact Ribony style) --- */
+.fb-login-btn {
+  width: 100%;
+  height: 44px;
+  background: #3b5998;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 400;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  transition: background 0.2s;
+  border-bottom: 2px solid #2d4373;
+  position: relative;
+  padding-left: 44px;
+}
+
+.fb-login-btn:hover {
+  background: #2d4373;
+}
+
+.fb-icon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  background: rgba(0, 0, 0, 0.12);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Georgia', serif;
+  border-radius: 5px 0 0 5px;
+}
+
+/* --- Home Right (Registration) --- */
+.home_right {
+  width: 400px;
+  position: absolute;
+  padding: 14px;
+  background: #fff;
+  right: 0;
+  top: 130px;
+  z-index: 99999;
+  border-radius: 5px;
+}
+
+.home_right h3 {
+  width: 100%;
+  font-size: 29px;
+  color: #262A51;
+  text-align: center;
+  font-weight: 300;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.login_line {
+  width: 100%;
+  height: 2px;
+  border-bottom: 1px solid #F0F0F0;
+  margin: 22px 0;
+}
+
+.login_line span {
+  display: block;
+  width: auto;
+  padding: 0 10px;
+  margin: 0 auto;
+  height: 10px;
+  line-height: 5px;
+  color: #ccc;
+  font-size: 15px;
+  text-align: center;
+  background: #fff;
+  position: relative;
+  z-index: 55;
+  width: fit-content;
+}
+
+.home_right input[type=text],
+.home_right input[type=email],
+.home_right input[type=password] {
+  width: 100%;
+  color: #383A66;
+  font-size: 13px;
+  transition-duration: 0.5s;
+  margin-bottom: 15px;
+  height: 38px;
+  line-height: 38px;
+  border: 1px solid #CDCDCD;
+  outline: none;
+  padding-left: 10px;
+  border-radius: 3px;
+}
+
+.home_right input[type=text]:focus,
+.home_right input[type=email]:focus,
+.home_right input[type=password]:focus {
+  border: 1px solid #A7ACCD;
+  box-shadow: inset -1px 11px 55px -26px rgba(167,172,205,0.15);
+}
+
+.errorbox {
+  padding: 0 15px;
+  background: #D35757;
+  color: #fff;
+  height: 36px;
+  line-height: 36px;
+  width: 100%;
+  margin: -5px 0 10px 0;
+  border-radius: 3px;
+}
+
+.errorbox span {
+  font-size: 15px;
+  height: 36px;
+  line-height: 25px;
+  color: #fff;
+  margin-right: 4px;
+}
+
+.joinnow {
+  width: 100%;
+  outline: none;
+  margin-top: 10px;
+  border-bottom: 2px solid #588D52;
+  transition-duration: 0.3s;
+  font-weight: 300;
+  background: #6CA765;
+  height: 44px;
+  line-height: 44px;
+  color: #fff;
+  font-size: 18px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  border-bottom: 2px solid #588D52;
+}
+
+.joinnow:hover {
+  background: #7CB077;
+}
+
+.joinnow:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Checkbox styling */
+.container {
+  display: block;
+  position: relative;
+  padding-left: 28px;
+  margin: 10px 0 0 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  user-select: none;
+}
+
+.container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 18px;
+  width: 18px;
+  background-color: #eee;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+.container:hover input ~ .checkmark {
+  background-color: #ddd;
+}
+
+.container input:checked ~ .checkmark {
+  background-color: #7C4DFF;
+  border-color: #7C4DFF;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.container input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.container .checkmark:after {
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 11px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.container a {
+  color: #7C4DFF;
+}
+
+.container a:hover {
+  text-decoration: underline;
+}
+
+/* --- Footer --- */
+.hfooter {
+  width: 100%;
+  height: 50px;
+  position: absolute;
+  z-index: 994;
+  bottom: 0;
+  left: 0;
+}
+
+.hfooter p {
+  display: block;
+  float: left;
+  height: 50px;
+  line-height: 50px;
+  color: #ADB8CF;
+  font-size: 14px;
+}
+
+.hfooter ul li a {
+  display: block;
+  outline: none;
+  float: right;
+  height: 50px;
+  line-height: 50px;
+  color: #ADB8CF;
+  font-size: 14px;
+  padding: 0 10px;
+  transition-duration: 0.5s;
+}
+
+.hfooter ul li a:hover {
+  color: #fff;
+}
+
+/* --- Clear Float --- */
+.clear {
+  clear: both;
+}
+
+/* ═══════════════════════════════════════
+   Modal Overlays (Ribony-style popups)
+   ═══════════════════════════════════════ */
+
+.modal-overlay {
+  position: fixed;
+  z-index: 999999;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-box {
+  background: #fff;
+  width: 520px;
+  max-width: 90%;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  padding: 20px 30px 0;
+  margin: 0;
+}
+
+.modal-header {
+  background: #3a7c8c;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-header-icon {
+  font-size: 20px;
+}
+
+.modal-label {
+  display: block;
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.modal-input {
+  width: 100%;
+  height: 36px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: #333;
+  outline: none;
+  margin-bottom: 14px;
+  transition: border 0.2s;
+}
+
+.modal-input:focus {
+  border-color: #888;
+}
+
+.modal-textarea {
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #333;
+  outline: none;
+  margin-bottom: 14px;
+  resize: vertical;
+  font-family: 'Roboto', sans-serif;
+  transition: border 0.2s;
+}
+
+.modal-textarea:focus {
+  border-color: #888;
+}
+
+.modal-submit {
+  background: #3a7c8c;
+  color: #fff;
+  border: none;
+  height: 36px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.modal-submit:hover {
+  background: #2e6370;
+}
+
+/* ═══════════════════════════════════════
+   Responsive Breakpoints (from original)
+   ═══════════════════════════════════════ */
+
+@media (min-width: 992px) and (max-width: 1560px) {
+  .hcontent { width: 1130px; }
+  .home_right { right: 0; top: 100px; width: 350px; padding: 10px; }
+  .home_left { width: 740px; left: 0; top: 80px; }
+  .home_right input[type=text],
+  .home_right input[type=email],
+  .home_right input[type=password] { height: 34px; line-height: 34px; margin-bottom: 10px; }
+  .home_right h3 { font-size: 24px; margin-top: 0; margin-bottom: 10px; }
+  .joinnow { height: 36px; line-height: 35px; font-size: 17px; }
+  .errorbox { height: 32px; line-height: 32px; margin: 5px 0 0 0; }
+  .home_left > p { font-size: 16px; margin-bottom: 20px; margin-top: 0; }
+  #holder { height: 50px; font-size: 28px; margin: 30px 0 0 0; }
+  p.slogan { font-size: 28px; }
+}
+
+@media (min-width: 1024px) and (max-width: 1180px) {
+  .hcontent { width: 1060px; }
+  .header { padding: 0 30px; }
+  .home_right { right: 30px; top: 100px; width: 26%; }
+  .home_left { width: 740px; left: 30px; top: 80px; }
+  .hfooter { padding: 0 30px; }
+  .home_right input[type=text],
+  .home_right input[type=email],
+  .home_right input[type=password] { height: 34px; line-height: 34px; margin-bottom: 10px; }
+  .home_right h3 { font-size: 24px; margin-top: 0; margin-bottom: 10px; }
+  .joinnow { height: 36px; line-height: 35px; font-size: 17px; }
+  .errorbox { height: 32px; line-height: 32px; margin: -5px 0 5px 0; }
+  .home_left > p { font-size: 16px; margin-bottom: 20px; margin-top: 0; }
+  #holder { height: 50px; font-size: 28px; margin: 30px 0 0 0; }
+  p.slogan { font-size: 28px; }
+}
+
+@media (max-width: 991px) {
+  .hcontent { width: 95%; position: relative; margin: 0 auto; }
+  .header { position: relative; height: auto; padding: 15px 0; }
+  .logins { width: 100%; height: auto; float: none; }
+  .header p { height: auto; line-height: 1.4; margin: 0 0 10px 0; float: none; }
+  .header input[type=text],
+  .header input[type=password] { width: 100%; margin: 5px 0; }
+  .header input[type=submit] { width: 100%; margin: 10px 0 0 0; }
+  .header span a { float: none; margin: 10px 0 0 0; }
+  .login-error-msg { float: none; margin: 5px 0 0 0; }
+  .home_left { position: relative; width: 100%; top: 0; margin-top: 20px; }
+  .home_right { position: relative; width: 100%; top: 0; margin-top: 20px; right: 0; }
+  .home_pop_list { width: 100%; }
+  .hfooter { position: relative; margin-top: 20px; }
+  #holder { height: auto; margin: 20px 0 0 0; }
+  p.slogan { font-size: 24px; }
+}
