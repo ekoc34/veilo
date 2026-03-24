@@ -184,14 +184,15 @@ export default function ProfilePage() {
   useEffect(() => {
     if (isOwnProfile || !profileData?.uid) return;
     
-    // Clear messages immediately for visitors
+    // Always start with empty messages for visitors
     setMessages([]);
     
     const chatId = profileData.uid;
     const msgsRef = collection(db, 'chats', chatId, 'messages');
+    const sessionStart = Date.now(); // Track session start timestamp
+    
     const q = query(msgsRef, orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const now = new Date();
       const newMsgs = snapshot.docs
         .map((d) => {
           const data = d.data();
@@ -205,8 +206,8 @@ export default function ProfilePage() {
             createdAt: ts,
           } as ChatMsg;
         })
-        // Only show messages from the last 5 minutes for visitors
-        .filter((msg) => (now.getTime() - msg.createdAt.getTime()) < 5 * 60 * 1000);
+        // Only show messages sent AFTER visitor opened the page
+        .filter((msg) => msg.createdAt.getTime() >= sessionStart);
       setMessages(newMsgs);
       
       // Auto-create conversation when visitor sends message
@@ -354,75 +355,6 @@ export default function ProfilePage() {
             <Link href="/">VEILO</Link>
           </div>
           <ul>
-            {user && (
-              <li className="nav-hint-wrap">
-                <a className="nav-btn nav-user">
-                  <img src="/images/icon-user.svg" alt="" />
-                </a>
-                <div className="nav-hint-dropdown">
-                  <div className="nav-hint-item">
-                    <span>Toon in online lijst</span>
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={showOnlineList} onChange={(e) => setShowOnlineList(e.target.checked)} />
-                      <span className="toggle-slider"></span>
-                      <span className="toggle-label">{showOnlineList ? 'Aan' : 'Uit'}</span>
-                    </label>
-                  </div>
-                  <div className="nav-hint-item">
-                    <span>{"Foto's mogen naar mij worden gestuurd"}</span>
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={allowPhotos} onChange={(e) => setAllowPhotos(e.target.checked)} />
-                      <span className="toggle-slider"></span>
-                      <span className="toggle-label">{allowPhotos ? 'Aan' : 'Uit'}</span>
-                    </label>
-                  </div>
-                </div>
-              </li>
-            )}
-            {user ? (
-              <li>
-                <a onClick={logout} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
-                  <img src="/images/icon-logout.svg" alt="" />
-                  Uitloggen
-                </a>
-              </li>
-            ) : (
-              <li>
-                <Link href="/" className="nav-btn buser">
-                  Word lid
-                </Link>
-              </li>
-            )}
-            <li>
-              <a className="nav-btn nav-settings" onClick={() => { setShowSettings(true); setSettingsTab('general'); }} style={{ cursor: 'pointer' }}>
-                <img src="/images/icon-settings.svg" alt="" />
-                Instellingen
-              </a>
-            </li>
-            <li>
-              <a className="nav-btn nav-messages" onClick={() => setShowMessages(true)} style={{ cursor: 'pointer' }}>
-                <img src="/images/icon-messages.svg" alt="" />
-                Berichten
-              </a>
-            </li>
-            <li>
-              <a className="nav-btn nav-following" onClick={() => setShowFollowing(true)} style={{ cursor: 'pointer' }}>
-                <img src="/images/icon-following.svg" alt="" />
-                Volglijst
-              </a>
-            </li>
-            <li>
-              <a className="nav-btn nav-popular" onClick={() => setShowPopular(true)} style={{ cursor: 'pointer' }}>
-                <img src="/images/icon-popular.svg" alt="" />
-                Populairen
-              </a>
-            </li>
-            <li>
-              <a href="#" className="nav-btn nav-groups">
-                <img src="/images/icon-groups.svg" alt="" />
-                Groepen
-              </a>
-            </li>
             <li>
               <a className="nav-btn nav-sound" onClick={() => setSoundOn(!soundOn)} style={{ cursor: 'pointer' }}>
                 <img src="/images/icon-sound.svg" alt="" />
