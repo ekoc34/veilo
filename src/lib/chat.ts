@@ -13,6 +13,7 @@ export interface ChatMsg {
   senderUid: string | null;
   text: string;
   time: string;
+  createdAt: Date;
 }
 
 export function getAnonId(): string {
