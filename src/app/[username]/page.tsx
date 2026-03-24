@@ -223,6 +223,38 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [isOwnProfile, profileData?.uid]);
 
+  /* Profile owner also listens to visitor messages for real-time updates */
+  useEffect(() => {
+    if (!isOwnProfile || !profileData?.uid) return;
+    
+    const chatId = profileData.uid;
+    const msgsRef = collection(db, 'chats', chatId, 'messages');
+    
+    const q = query(msgsRef, orderBy('createdAt', 'desc'), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          const ts = data.createdAt?.toDate?.() || new Date();
+          const newMsg: ChatMsg = {
+            id: change.doc.id,
+            sender: data.sender || 'Anoniem',
+            senderUid: data.senderUid || null,
+            text: data.text || '',
+            time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
+            createdAt: ts,
+          };
+          
+          // Auto-create conversation for new visitor messages
+          if (newMsg.senderUid) {
+            ensureConversation(newMsg.sender, newMsg.senderUid);
+          }
+        }
+      });
+    });
+    return () => unsubscribe();
+  }, [isOwnProfile, profileData?.uid]);
+
   /* Clear messages when page closes (for visitors) */
   useEffect(() => {
     return () => {
@@ -423,7 +455,7 @@ export default function ProfilePage() {
                 </li>
               </>
             )}
-            {/* Always show speaker icon */}
+            {/* Always show speaker icon at the very end */}
             <li>
               <a className="nav-btn nav-sound" onClick={() => setSoundOn(!soundOn)} style={{ cursor: 'pointer' }}>
                 <img src="/images/icon-sound.svg" alt="" />
