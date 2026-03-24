@@ -245,15 +245,20 @@ export default function ProfilePage() {
             createdAt: ts,
           };
           
-          // Auto-create conversation for new visitor messages
+          // Add message to active conversation or create new one
           if (newMsg.senderUid) {
-            ensureConversation(newMsg.sender, newMsg.senderUid);
+            ensureConversation(newMsg.sender, newMsg.senderUid).then((convId) => {
+              if (convId && (!activeConvId || activeConvId === convId)) {
+                setActiveConvId(convId);
+                // Trigger message refresh for this conversation
+              }
+            });
           }
         }
       });
     });
     return () => unsubscribe();
-  }, [isOwnProfile, profileData?.uid]);
+  }, [isOwnProfile, profileData?.uid, activeConvId]);
 
   /* Clear messages when page closes (for visitors) */
   useEffect(() => {
@@ -323,6 +328,22 @@ export default function ProfilePage() {
         ownerTyping: false,
         createdAt: serverTimestamp(),
       });
+      
+      // Copy recent messages from the visitor chat to this conversation
+      const msgsRef = collection(db, 'chats', profileData.uid, 'messages');
+      const msgsQuery = query(msgsRef, where('senderUid', '==', senderUid), orderBy('createdAt', 'desc'), limit(10));
+      const msgsSnap = await getDocs(msgsQuery);
+      
+      for (const msgDoc of msgsSnap.docs) {
+        const msgData = msgDoc.data();
+        await addDoc(collection(db, 'users', profileData.uid, 'conversations', convDoc.id, 'messages'), {
+          sender: msgData.sender,
+          senderUid: msgData.senderUid,
+          text: msgData.text,
+          createdAt: msgData.createdAt,
+        });
+      }
+      
       return convDoc.id;
     }
     return snap.docs[0].id;
@@ -392,6 +413,42 @@ export default function ProfilePage() {
             {/* Show full navigation when viewing own profile */}
             {isOwnProfile && (
               <>
+                <li>
+                  <a href="#" className="nav-btn nav-groups">
+                    <img src="/images/icon-groups.svg" alt="" />
+                    Groepen
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-popular" onClick={() => setShowPopular(true)} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-popular.svg" alt="" />
+                    Populairen
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-following" onClick={() => setShowFollowing(true)} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-following.svg" alt="" />
+                    Volglijst
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-messages" onClick={() => setShowMessages(true)} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-messages.svg" alt="" />
+                    Berichten
+                  </a>
+                </li>
+                <li>
+                  <a className="nav-btn nav-settings" onClick={() => { setShowSettings(true); setSettingsTab('general'); }} style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-settings.svg" alt="" />
+                    Instellingen
+                  </a>
+                </li>
+                <li>
+                  <a onClick={logout} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
+                    <img src="/images/icon-logout.svg" alt="" />
+                    Uitloggen
+                  </a>
+                </li>
                 {user && (
                   <li className="nav-hint-wrap">
                     <a className="nav-btn nav-user">
@@ -417,42 +474,6 @@ export default function ProfilePage() {
                     </div>
                   </li>
                 )}
-                <li>
-                  <a className="nav-btn nav-settings" onClick={() => { setShowSettings(true); setSettingsTab('general'); }} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-settings.svg" alt="" />
-                    Instellingen
-                  </a>
-                </li>
-                <li>
-                  <a className="nav-btn nav-messages" onClick={() => setShowMessages(true)} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-messages.svg" alt="" />
-                    Berichten
-                  </a>
-                </li>
-                <li>
-                  <a className="nav-btn nav-following" onClick={() => setShowFollowing(true)} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-following.svg" alt="" />
-                    Volglijst
-                  </a>
-                </li>
-                <li>
-                  <a className="nav-btn nav-popular" onClick={() => setShowPopular(true)} style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-popular.svg" alt="" />
-                    Populairen
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="nav-btn nav-groups">
-                    <img src="/images/icon-groups.svg" alt="" />
-                    Groepen
-                  </a>
-                </li>
-                <li>
-                  <a onClick={logout} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
-                    <img src="/images/icon-logout.svg" alt="" />
-                    Uitloggen
-                  </a>
-                </li>
               </>
             )}
             {/* Always show speaker icon at the very end */}
