@@ -840,42 +840,49 @@
   left: 0;
   right: 0;
   height: 40px;
-  background: #000000;
+  background: transparent; /* Transparent background */
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0 10px; /* Aligned closer to the left edge */
+  padding: 0; /* Align far left */
   cursor: pointer;
   z-index: 10;
   border: none;
+  outline: none;
 }
 
 .profile_pic_change_file {
   display: flex;
   align-items: center;
-  gap: 8px;
-  border: none;
-  background: none;
+  gap: 6px;
+  border: none !important;
+  background: none !important;
   padding: 0;
+  box-shadow: none !important;
 }
 
 .profile_pic_change_camera {
   width: 20px;
   height: 16px;
   filter: brightness(0) invert(1); /* Pure white icon */
-  border: none;
-  background: none;
+  border: none !important;
+  background: transparent !important;
   display: block;
+  box-shadow: none !important;
+  padding: 0;
+  margin: 0;
 }
 
 .profile_pic_change_file span {
   white-space: nowrap;
-  color: #FFFFFF; /* Changed text color to white as per request */
+  color: #FFFFFF;
   font-size: 14px;
   font-weight: normal;
   font-family: Arial, sans-serif;
-  border: none;
-  background: none;
+  border: none !important;
+  background: transparent !important;
+  padding: 0;
+  margin: 0;
 }
 
 /* --- Message styling to match örnek images --- */
