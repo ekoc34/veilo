@@ -3,10 +3,10 @@ import Providers from './Providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Veilo | Anonymous Chat',
+  title: 'Veilo | Anoniem Chat',
   description: 'Anoniem chatten en anoniem nieuwe mensen ontmoeten. Je identiteit blijft verborgen.',
   openGraph: {
-    title: 'Veilo | Anonymous Chat',
+    title: 'Veilo | Anoniem Chat',
     description: 'Anoniem chatten en anoniem nieuwe mensen ontmoeten. Je identiteit blijft verborgen.',
     url: 'https://veilo.nl',
     siteName: 'VEILO',
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     site: '@veilonl',
-    title: 'Veilo | Anonymous Chat',
+    title: 'Veilo | Anoniem Chat',
     description: 'Anoniem chatten en anoniem nieuwe mensen ontmoeten. Je identiteit blijft verborgen.',
     images: ['https://veilo.nl/images/fbpost.png'],
   },

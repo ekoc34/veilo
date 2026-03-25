@@ -98,6 +98,25 @@ export default function ProfilePage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isOwnProfile = user && myProfile?.username === username;
 
+  /* Dynamic Browser Tab Title */
+  useEffect(() => {
+    if (profileLoading) return;
+    
+    // Fallback for displayName if profileData is still null
+    const currentDisplayName = profileData?.displayName || username;
+
+    if (isOwnProfile) {
+      document.title = 'Veilo';
+    } else {
+      document.title = `${currentDisplayName} | Veilo`;
+    }
+
+    // Restore default title on unmount
+    return () => {
+      document.title = 'Veilo | Anoniem Chat';
+    };
+  }, [isOwnProfile, profileData, username, profileLoading]);
+
   /* Online users (will be populated from Firestore later) */
   const [onlineUsers] = useState<OnlineUser[]>(
     Array.from({ length: 16 }, (_, i) => ({
