@@ -114,28 +114,38 @@ export default function ProfilePage() {
       try {
         const usersRef = collection(db, 'users');
         const q = query(usersRef, where('username', '==', username));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const docData = snap.docs[0].data();
-          setProfileData({
-            uid: snap.docs[0].id,
-            displayName: docData.name || username,
-            username: docData.username || username,
-            bio: docData.bio || '',
-            followers: docData.followers || 0,
-            profileImg: docData.profileImg || '/images/default-avatar.svg',
-            veil1: docData.veil1 || 0,
-            veil2: docData.veil2 || 0,
-            veil3: docData.veil3 || 0,
-            veil4: docData.veil4 || 0,
-          });
-        } else {
+        
+        // Use onSnapshot for real-time updates of profile data (like profileImg)
+        const unsubscribe = onSnapshot(q, (snap) => {
+          if (!snap.empty) {
+            const docData = snap.docs[0].data();
+            setProfileData({
+              uid: snap.docs[0].id,
+              displayName: docData.name || username,
+              username: docData.username || username,
+              bio: docData.bio || '',
+              followers: docData.followers || 0,
+              profileImg: docData.profileImg || '/images/default-avatar.svg',
+              veil1: docData.veil1 || 0,
+              veil2: docData.veil2 || 0,
+              veil3: docData.veil3 || 0,
+              veil4: docData.veil4 || 0,
+            });
+            setProfileNotFound(false);
+          } else {
+            setProfileNotFound(true);
+          }
+          setProfileLoading(false);
+        }, (error) => {
+          console.error('Error loading profile:', error);
           setProfileNotFound(true);
-        }
+          setProfileLoading(false);
+        });
+
+        return () => unsubscribe();
       } catch (error) {
-        console.error('Error loading profile:', error);
+        console.error('Error in loadProfile setup:', error);
         setProfileNotFound(true);
-      } finally {
         setProfileLoading(false);
       }
     }
