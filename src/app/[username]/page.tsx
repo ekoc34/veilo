@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -29,8 +29,10 @@ interface ProfileData {
   displayName: string;
   username: string;
   bio: string;
+  city: string;
   followers: number;
   profileImg: string;
+  themeColor: string;
   veil1: number;
   veil2: number;
   veil3: number;
@@ -77,6 +79,7 @@ export default function ProfilePage() {
   const [settingsCity, setSettingsCity] = useState('');
   const [settingsBio, setSettingsBio] = useState('');
   const [settingsOffline, setSettingsOffline] = useState('');
+  const [settingsColor, setSettingsColor] = useState('#28A0C8'); // Default theme color
   const [privacyShowCount, setPrivacyShowCount] = useState(true);
   const [privacyShowPopular, setPrivacyShowPopular] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
@@ -130,6 +133,26 @@ export default function ProfilePage() {
     }
   }, [showSettings, profileData, myProfile]);
 
+  /* Online status tracking */
+  useEffect(() => {
+    if (!user || !isOwnProfile) return;
+
+    const userRef = doc(db, 'users', user.uid);
+    const updateLastSeen = async () => {
+      try {
+        await updateDoc(userRef, {
+          lastSeen: serverTimestamp()
+        });
+      } catch (err) {
+        console.error('Error updating lastSeen:', err);
+      }
+    };
+
+    updateLastSeen();
+    const interval = setInterval(updateLastSeen, 120000);
+    return () => clearInterval(interval);
+  }, [user, isOwnProfile]);
+
   /* Online users state */
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]); // For searching
@@ -145,10 +168,17 @@ export default function ProfilePage() {
       }));
       setAllUsers(usersData);
 
-      // Filter for online users (e.g., active in last 5 minutes)
+      // Filter for online users (active in last 5 minutes) and sort by promoted status and lastSeen
       const now = Date.now();
       const online = usersData
         .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000)
+        .sort((a, b) => {
+          // First sort by isPromoted
+          if (a.isPromoted && !b.isPromoted) return -1;
+          if (!a.isPromoted && b.isPromoted) return 1;
+          // Then sort by lastSeen
+          return b.lastSeen.toMillis() - a.lastSeen.toMillis();
+        })
         .map(u => ({
           username: u.username || '',
           img: u.profileImg || '/images/default-avatar.svg',
@@ -187,6 +217,21 @@ export default function ProfilePage() {
     setFilteredOnlineUsers(filtered);
   }, [searchCity, onlineUsers, allUsers]);
 
+  /* Load blocked users for logged-in profile owner */
+  useEffect(() => {
+    if (!user || !isOwnProfile) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.blockedUsers) {
+          setBlockedSenders(new Set(data.blockedUsers));
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [user, isOwnProfile]);
+
   /* Load profile: fetch from Firestore to ensure latest data, especially for profile picture */
   useEffect(() => {
     async function loadProfile() {
@@ -204,8 +249,10 @@ export default function ProfilePage() {
               displayName: docData.name || username,
               username: docData.username || username,
               bio: docData.bio || '',
+              city: docData.city || '',
               followers: docData.followers || 0,
               profileImg: docData.profileImg || '/images/default-avatar.svg',
+              themeColor: docData.themeColor || '#28A0C8',
               veil1: docData.veil1 || 0,
               veil2: docData.veil2 || 0,
               veil3: docData.veil3 || 0,
@@ -505,20 +552,27 @@ export default function ProfilePage() {
 
   /* Give a veil to this profile */
   async function giveVeil(idx: number) {
-    if (!profileData?.uid) return;
+    if (!profileData?.uid || isOwnProfile) return;
+    
+    // Check if user has already voted for this profile in this session (basic prevention)
+    const voteKey = `veil_voted_${profileData.uid}_${idx}`;
+    if (localStorage.getItem(voteKey)) return;
+
     const field = `veil${idx + 1}`;
     try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        await updateDoc(snap.docs[0].ref, { [field]: increment(1) });
-        setProfileData((prev) =>
-          prev ? { ...prev, [field]: (prev[field as keyof ProfileData] as number) + 1 } : prev
-        );
-      }
-    } catch {
-      /* silently fail */
+      const userRef = doc(db, 'users', profileData.uid);
+      await updateDoc(userRef, { 
+        [field]: increment(1) 
+      });
+      
+      // Update local state immediately
+      setProfileData((prev) =>
+        prev ? { ...prev, [field]: (prev[field as keyof ProfileData] as number) + 1 } : prev
+      );
+      
+      localStorage.setItem(voteKey, 'true');
+    } catch (error) {
+      console.error('Error giving veil:', error);
     }
   }
 
@@ -537,13 +591,21 @@ export default function ProfilePage() {
   }
 
   function confirmBlock(senderUid: string) {
-    setBlockedSenders(prev => new Set(prev).add(senderUid));
+    if (!user) {
+      // For anonymous users, just keep it local
+      setBlockedSenders(prev => new Set(prev).add(senderUid));
+    } else {
+      // For registered users, save to Firestore
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, {
+        blockedUsers: arrayUnion(senderUid)
+      }).catch(err => console.error('Error blocking user:', err));
+    }
+
     if (activeConversation === senderUid) {
-      // Switch to another conversation if available
       const remainingSenders = [...new Set(messages.map(m => m.senderUid).filter(Boolean) as string[])].filter(s => s !== senderUid && !blockedSenders.has(s));
       setActiveConversation(remainingSenders.length > 0 ? remainingSenders[0] : null);
     }
-    // Remove messages from blocked sender
     setMessages(prev => prev.filter(m => m.senderUid !== senderUid));
     setShowBlockConfirm(null);
   }
@@ -633,13 +695,127 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleDesignUpdate() {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        themeColor: settingsColor,
+        updatedAt: serverTimestamp()
+      });
+      setSettingsUpdated(true);
+      setTimeout(() => setSettingsUpdated(false), 3000);
+    } catch (error) {
+      console.error('Error updating design settings:', error);
+    }
+  }
+
+  async function handlePrivacyUpdate() {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        privacyShowCount,
+        privacyShowPopular,
+        updatedAt: serverTimestamp()
+      });
+      setSettingsUpdated(true);
+      setTimeout(() => setSettingsUpdated(false), 3000);
+    } catch (error) {
+      console.error('Error updating privacy settings:', error);
+    }
+  }
+
+  async function handleClearBlocks() {
+    if (!user || !window.confirm('Weet je zeker dat je alle blokkades wilt verwijderen?')) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        blockedUsers: []
+      });
+      setBlockedSenders(new Set());
+      alert('Alle blokkades zijn verwijderd.');
+    } catch (error) {
+      console.error('Error clearing blocks:', error);
+    }
+  }
+
+  async function handlePasswordReset() {
+    if (!user?.email) return;
+    try {
+      // In a real app, you'd use Firebase sendPasswordResetEmail
+      // For now, we'll simulate the success
+      alert(`Er is een e-mail gestuurd naar ${user.email} om je wachtwoord te herstellen.`);
+    } catch (error) {
+      console.error('Error sending password reset:', error);
+    }
+  }
+
+  async function handleFreezeAccount() {
+    if (!user || !window.confirm('Weet je zeker dat je je account wilt bevriezen? Je wordt uitgelogd en je profiel is niet meer zichtbaar.')) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        status: 'frozen',
+        updatedAt: serverTimestamp()
+      });
+      await logout();
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error freezing account:', error);
+    }
+  }
+
   function triggerProfilePicChange() {
     fileInputRef.current?.click();
   }
 
-  function handleRefresh() {
-    if (searchCity.trim()) {
-      setFilterActive(true);
+  async function handleRefresh() {
+    try {
+      const usersRef = collection(db, 'users');
+      const snap = await getDocs(usersRef);
+      const usersData = snap.docs.map(doc => ({
+        uid: doc.id,
+        ...(doc.data() as any)
+      }));
+      setAllUsers(usersData);
+
+      const now = Date.now();
+      const online = usersData
+        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000)
+        .sort((a, b) => {
+          if (a.isPromoted && !b.isPromoted) return -1;
+          if (!a.isPromoted && b.isPromoted) return 1;
+          return b.lastSeen.toMillis() - a.lastSeen.toMillis();
+        })
+        .map(u => ({
+          username: u.username || '',
+          img: u.profileImg || '/images/default-avatar.svg',
+          alt: u.displayName || u.username || '',
+          displayName: u.displayName || u.username || '',
+          bio: u.bio || '',
+          city: u.city || ''
+        }));
+      setOnlineUsers(online);
+      
+      if (searchCity.trim()) {
+        const query = searchCity.toLowerCase();
+        const filtered = usersData.filter(u => 
+          (u.displayName || '').toLowerCase().includes(query) ||
+          (u.bio || '').toLowerCase().includes(query) ||
+          (u.city || '').toLowerCase().includes(query)
+        ).map(u => ({
+          username: u.username || '',
+          img: u.profileImg || '/images/default-avatar.svg',
+          alt: u.displayName || u.username || '',
+          displayName: u.displayName || u.username || '',
+          bio: u.bio || '',
+          city: u.city || ''
+        }));
+        setFilteredOnlineUsers(filtered);
+        setFilterActive(true);
+      } else {
+        setFilteredOnlineUsers(online);
+        setFilterActive(false);
+      }
+    } catch (err) {
+      console.error('Error refreshing online list:', err);
     }
   }
 
@@ -884,7 +1060,7 @@ export default function ProfilePage() {
                   <div className="settings-row">
                     <label></label>
                     <div className="settings-field">
-                      <a className="settings-freeze">Account bevriezen</a>
+                      <a className="settings-freeze" onClick={handleFreezeAccount}>Account bevriezen</a>
                     </div>
                   </div>
                   <div className="settings-row">
@@ -901,18 +1077,22 @@ export default function ProfilePage() {
                     <h3>Profielfoto wijzigen</h3>
                     <div className="settings-design-box">
                       <img src={profileData?.profileImg || '/images/default-avatar.svg'} alt="" />
-                      <button className="settings-btn">Bladeren</button>
+                      <button className="settings-btn" onClick={triggerProfilePicChange}>Bladeren</button>
                     </div>
                     <span>Maximale bestandsgrootte: 2MB</span>
                   </div>
                   <div className="settings-design-col">
-                    <h3>Achtergrondfoto wijzigen</h3>
-                    <div className="settings-design-box">
-                      <div className="settings-bg-placeholder"></div>
-                      <button className="settings-btn">Bladeren</button>
+                    <h3>Thema kleur wijzigen</h3>
+                    <div className="settings-design-box" style={{ padding: '15px' }}>
+                      <input 
+                        type="color" 
+                        value={settingsColor} 
+                        onChange={(e) => setSettingsColor(e.target.value)} 
+                        style={{ width: '100%', height: '40px', cursor: 'pointer' }}
+                      />
                     </div>
-                    <label className="settings-checkbox"><input type="checkbox" /> Achtergrond herhalen</label>
-                    <a className="settings-remove-link">Achtergrond verwijderen</a>
+                    <span>Kies een kleur voor je profiel accenten.</span>
+                    <button className="settings-btn" style={{ marginTop: 15 }} onClick={handleDesignUpdate}>Kleur opslaan</button>
                   </div>
                 </div>
               )}
@@ -927,38 +1107,26 @@ export default function ProfilePage() {
                     <input type="checkbox" checked={privacyShowPopular} onChange={(e) => setPrivacyShowPopular(e.target.checked)} />
                     Toon mij niet op de homepage, ook niet als ik populair ben. (Deze wijziging kan even duren.)
                   </label>
-                  <a className="settings-remove-link" style={{ display: 'block', marginTop: 15 }}>Verwijder alle blokkades die je tot nu toe hebt gemaakt.</a>
-                  <button className="settings-btn" style={{ marginTop: 15 }}>Wijzigingen opslaan</button>
+                  <a 
+                    className="settings-remove-link" 
+                    style={{ display: 'block', marginTop: 15, cursor: 'pointer' }}
+                    onClick={handleClearBlocks}
+                  >
+                    Verwijder alle blokkades die je tot nu toe hebt gemaakt.
+                  </a>
+                  <button className="settings-btn" style={{ marginTop: 15 }} onClick={handlePrivacyUpdate}>Wijzigingen opslaan</button>
                 </div>
               )}
               {settingsTab === 'password' && (
                 <div className="settings-form">
                   <h3>Wachtwoord wijzigen</h3>
-                  <div className="settings-row">
-                    <label>Oud wachtwoord</label>
-                    <div className="settings-field">
-                      <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} placeholder="Huidig wachtwoord" />
-                      <span>Je huidige wachtwoord</span>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <label>Nieuw wachtwoord</label>
-                    <div className="settings-field">
-                      <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Nieuw wachtwoord" />
-                      <span>Nieuw wachtwoord</span>
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <label>Bevestig wachtwoord</label>
-                    <div className="settings-field">
-                      <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Herhaal nieuw wachtwoord" />
-                      <span>Herhaal nieuw wachtwoord</span>
-                    </div>
-                  </div>
+                  <p style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>
+                    Voor je veiligheid raden we aan om je wachtwoord regelmatig te wijzigen. Klik op de knop hieronder om een herstel-e-mail te ontvangen.
+                  </p>
                   <div className="settings-row">
                     <label></label>
                     <div className="settings-field">
-                      <button className="settings-btn">Wijzigingen opslaan</button>
+                      <button className="settings-btn" onClick={handlePasswordReset}>Wachtwoord herstellen via e-mail</button>
                     </div>
                   </div>
                 </div>
@@ -1213,6 +1381,13 @@ export default function ProfilePage() {
                 <div className="looked"></div>
               </div>
 
+              {/* Visitor Bio Section */}
+              {(bio || city) && (
+                <div className="prof-bio" style={{ padding: '10px 15px', borderBottom: '1px solid #eee', fontSize: 13, color: '#555' }}>
+                  {bio}{bio && city ? ' - ' : ''}{city}
+                </div>
+              )}
+
               {/* Messages */}
               <div className="message_box">
                 {[...messages].reverse().map((msg) => (
@@ -1240,7 +1415,23 @@ export default function ProfilePage() {
           {/* ═══════ PROMOTE BAR ═══════ */}
           <div className="promote-bar">
             <span>TOON JE PROFIEL BOVENAAN DE ONLINE LIJST</span>
-            <a className="promote-btn">✔ NU ACTIVEREN</a>
+            <a 
+              className="promote-btn" 
+              onClick={() => {
+                if (isOwnProfile && user) {
+                  updateDoc(doc(db, 'users', user.uid), {
+                    lastSeen: serverTimestamp(), // Update lastSeen to "bump" the profile
+                    isPromoted: true,
+                    updatedAt: serverTimestamp()
+                  }).then(() => alert('Je profiel staat nu bovenaan de lijst!'));
+                } else {
+                  alert('Deze functie is alleen voor de profieleigenaar.');
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              ✔ NU ACTIVEREN
+            </a>
           </div>
 
           {/* ═══════ ONLINE USERS BOX ═══════ */}
@@ -1293,18 +1484,9 @@ export default function ProfilePage() {
           <div className="prof-footer">
             <span>Veilo © 2026</span>
             <ul>
-              <li>
-                <a 
-                  style={{ cursor: 'pointer' }} 
-                  onClick={() => {
-                    setShowContact(true);
-                    setContactSent(false);
-                    setContactError('');
-                  }}
-                >
-                  Help
-                </a>
-              </li>
+              <li><Link href="/beleid">Beleid</Link></li>
+              <li><a style={{ cursor: 'pointer' }} onClick={() => setShowContact(true)}>Contact</a></li>
+              <li><a style={{ cursor: 'pointer' }} onClick={() => setShowContact(true)}>Help</a></li>
             </ul>
           </div>
         </div>

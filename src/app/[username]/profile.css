@@ -1159,21 +1159,20 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.85);
   color: #fff;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 6px 10px;
+  border-radius: 3px;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   z-index: 1000;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-size: 12px;
-  min-width: 120px;
-  text-align: center;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  min-width: 100px;
+  text-align: left;
 }
 
 .online-tooltip::after {
@@ -1195,18 +1194,19 @@
 
 .online-tooltip strong {
   display: block;
-  font-weight: 800;
-  margin-bottom: 4px;
+  font-weight: 700;
+  margin-bottom: 2px;
   font-size: 13px;
+  color: #fff;
 }
 
 .online-tooltip p {
   margin: 0;
   font-weight: 400;
-  color: #ccc;
+  color: #ddd;
   font-size: 11px;
-  line-height: 1.4;
-  max-width: 200px;
+  line-height: 1.2;
+  max-width: 180px;
   white-space: normal;
 }
 
