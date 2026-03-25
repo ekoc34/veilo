@@ -109,7 +109,6 @@ export default function ProfilePage() {
 
   /* Load profile: fetch from Firestore to ensure latest data, especially for profile picture */
   useEffect(() => {
-    console.log('Setting up onSnapshot for username:', username);
     async function loadProfile() {
       setProfileLoading(true);
       try {
@@ -120,7 +119,6 @@ export default function ProfilePage() {
         const unsubscribe = onSnapshot(q, (snap) => {
           if (!snap.empty) {
             const docData = snap.docs[0].data();
-            console.log('Profile snapshot received:', docData);
             setProfileData({
               uid: snap.docs[0].id,
               displayName: docData.name || username,
@@ -135,22 +133,16 @@ export default function ProfilePage() {
             });
             setProfileNotFound(false);
           } else {
-            console.warn('Profile not found in snapshot for:', username);
             setProfileNotFound(true);
           }
           setProfileLoading(false);
         }, (error) => {
-          console.error('onSnapshot error for profile:', error);
           setProfileNotFound(true);
           setProfileLoading(false);
         });
 
-        return () => {
-          console.log('Unsubscribing from profile snapshot for:', username);
-          unsubscribe();
-        };
+        return () => unsubscribe();
       } catch (error) {
-        console.error('Error in loadProfile setup:', error);
         setProfileNotFound(true);
         setProfileLoading(false);
       }
@@ -500,7 +492,6 @@ export default function ProfilePage() {
         const downloadURL = await getDownloadURL(storageReference);
         
         // Update profile in Firestore with merge: true to ensure it works even if doc structure is slightly different
-        console.log('Attempting Firestore update for uid:', profileData.uid, 'with URL:', downloadURL);
         await setDoc(doc(db, 'users', profileData.uid), {
           profileImg: downloadURL,
           updatedAt: serverTimestamp()
@@ -511,8 +502,6 @@ export default function ProfilePage() {
         
         // Clear local preview after successful upload
         setSelectedProfilePic(null);
-        
-        console.log('Profile picture updated successfully in Firestore:', downloadURL);
       } catch (error) {
         console.error('Error in handleProfilePicChange:', error);
       }
@@ -548,16 +537,6 @@ export default function ProfilePage() {
     setFilterActive(false);
   }
 
-  if (profileLoading) {
-    return (
-      <div className="profile-body">
-        <div style={{ color: '#fff', textAlign: 'center', paddingTop: 120, fontSize: 18 }}>
-          Profiel laden...
-        </div>
-      </div>
-    );
-  }
-
   if (profileNotFound) {
     return (
       <div className="profile-body">
@@ -573,14 +552,6 @@ export default function ProfilePage() {
   const bio = profileData?.bio || '';
   const followers = profileData?.followers || 0;
   const profileImg = profileData?.profileImg || '/images/default-avatar.svg';
-
-  // Debug current state
-  console.log('ProfilePage state:', { 
-    username, 
-    uid: profileData?.uid, 
-    profileImg, 
-    selectedProfilePic: !!selectedProfilePic 
-  });
 
   const veils = [
     profileData?.veil1 || 0,

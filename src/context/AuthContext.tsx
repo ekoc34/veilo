@@ -44,7 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const data = docSnap.data();
-            console.log('AuthContext profile load:', firebaseUser.uid, data);
             setProfile({
               uid: firebaseUser.uid,
               name: data.name || firebaseUser.displayName || '',
@@ -56,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               createdAt: data.createdAt || '',
             });
           } else {
-            console.warn('AuthContext profile not found for uid:', firebaseUser.uid);
             setProfile({
               uid: firebaseUser.uid,
               name: firebaseUser.displayName || '',
@@ -66,8 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               followers: 0,
             });
           }
-        } catch (err) {
-          console.error('AuthContext load error:', err);
+        } catch {
           setProfile(null);
         }
       } else {
