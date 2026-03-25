@@ -80,6 +80,7 @@ export default function ProfilePage() {
   const [blockedSenders, setBlockedSenders] = useState<Set<string>>(new Set());
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
+  const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isOwnProfile = user && myProfile?.username === username;
@@ -269,15 +270,22 @@ export default function ProfilePage() {
         (msg.senderUid === user?.uid) // Always show own messages
       );
       
-      // Check for users who left (had messages before but none in current session)
-      const allSendersEver = new Set(allMsgs.map(m => m.senderUid).filter(Boolean));
-      const currentSessionSenders = new Set(sessionMsgs.filter(m => m.senderUid !== user?.uid).map(m => m.senderUid).filter(Boolean));
+      // Update user activity tracking
+      const newActivityMap = new Map<string, number>();
+      sessionMsgs.forEach(msg => {
+        if (msg.senderUid && msg.senderUid !== user?.uid) {
+          newActivityMap.set(msg.senderUid, msg.createdAt.getTime());
+        }
+      });
+      setUserLastActivity(newActivityMap);
       
-      const leftUsers = [...allSendersEver].filter(sender => 
-        !currentSessionSenders.has(sender) && 
-        sender !== user?.uid &&
-        !sender?.toString().startsWith('left-')
-      );
+      // Check for users who left (inactive for 5+ minutes)
+      const INACTIVE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+      const currentTime = Date.now();
+      
+      const leftUsers = [...newActivityMap.entries()] 
+        .filter(([_, lastActivity]) => currentTime - lastActivity > INACTIVE_THRESHOLD)
+        .map(([uid, _]) => uid);
       
       // Add "left conversation" messages
       const leftMsgs = leftUsers.map(sender => {
@@ -312,14 +320,12 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [isOwnProfile, profileData?.uid, user?.uid]);
 
-  /* Clear messages when page closes (for visitors) */
+  /* Clear everything on page refresh - fresh start */
   useEffect(() => {
-    return () => {
-      if (!isOwnProfile) {
-        setMessages([]);
-      }
-    };
-  }, [isOwnProfile]);
+    setMessages([]);
+    setActiveConversation(null);
+    // Don't clear profile data - it should persist
+  }, []);
 
   /* Send message to Firestore */
   async function sendMessage() {
