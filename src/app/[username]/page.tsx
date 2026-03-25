@@ -269,11 +269,15 @@ export default function ProfilePage() {
         (msg.senderUid === user?.uid) // Always show own messages
       );
       
-      // Check for users who left (no messages in last 30 seconds)
-      const activeSenders = new Set(sessionMsgs.map(m => m.senderUid).filter(Boolean));
-      const allRecentSenders = new Set(allMsgs.filter(m => m.createdAt.getTime() > sessionStart).map(m => m.senderUid).filter(Boolean));
+      // Check for users who left (had messages before but none in current session)
+      const allSendersEver = new Set(allMsgs.map(m => m.senderUid).filter(Boolean));
+      const currentSessionSenders = new Set(sessionMsgs.filter(m => m.senderUid !== user?.uid).map(m => m.senderUid).filter(Boolean));
       
-      const leftUsers = [...allRecentSenders].filter(sender => !activeSenders.has(sender) && sender !== user?.uid);
+      const leftUsers = [...allSendersEver].filter(sender => 
+        !currentSessionSenders.has(sender) && 
+        sender !== user?.uid &&
+        !sender?.toString().startsWith('left-')
+      );
       
       // Add "left conversation" messages
       const leftMsgs = leftUsers.map(sender => {
@@ -321,9 +325,9 @@ export default function ProfilePage() {
   async function sendMessage() {
     if (!message.trim() || !profileData?.uid) return;
     
-    // Profile owner replies into the same chats/{uid}/messages collection
+    // Profile owner replies - use username not name
     if (isOwnProfile) {
-      const senderName = myProfile?.name || 'Eigenaar';
+      const senderName = myProfile?.username || 'Eigenaar';
       try {
         await addDoc(collection(db, 'chats', profileData.uid, 'messages'), {
           sender: senderName,
@@ -811,9 +815,10 @@ export default function ProfilePage() {
           {/* Profile Owner: Tabbed chat interface */}
           {isOwnProfile ? (
             <div className="chat_box">
-              {/* Conversation tabs */}
+              {/* Conversation tabs - only show anonymous users */}
               {(() => {
-                const uniqueSenders = [...new Set(messages.map(m => m.senderUid).filter(Boolean) as string[])];
+                // Only get senders who are NOT the profile owner (anonymous users only)
+                const uniqueSenders = [...new Set(messages.filter(m => m.senderUid !== user?.uid).map(m => m.senderUid).filter(Boolean) as string[])];
                 const availableSenders = uniqueSenders.filter(s => !blockedSenders.has(s));
                 return availableSenders.length > 0 && (
                   <div className="chat-tabs">
@@ -846,8 +851,9 @@ export default function ProfilePage() {
                       const input = e.target as HTMLInputElement;
                       if (input.value.trim()) {
                         addDoc(collection(db, 'chats', profileData!.uid, 'messages'), {
-                          sender: myProfile?.name || 'Eigenaar',
+                          sender: myProfile?.username || 'Eigenaar',
                           senderUid: user?.uid,
+                          recipientUid: activeConversation, // Tag message for specific recipient
                           text: input.value,
                           createdAt: serverTimestamp(),
                         });
@@ -881,7 +887,11 @@ export default function ProfilePage() {
                   </div>
                 ) : (
                   (() => {
-                    const activeMsgs = messages.filter(m => m.senderUid === activeConversation);
+                    // Show: 1) Messages FROM the anonymous user, 2) Messages TO the anonymous user (owner's replies)
+                    const activeMsgs = messages.filter(m => 
+                      m.senderUid === activeConversation || 
+                      (m as any).recipientUid === activeConversation
+                    );
                     return activeMsgs.length === 0 ? (
                       <div className="empty-chat">
                         <p style={{ color: '#999', textAlign: 'center', marginTop: 60 }}>
