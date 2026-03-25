@@ -82,6 +82,9 @@ export default function ProfilePage() {
   const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
   const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
   
+  // Track session start time for clean state
+  const sessionStartTime = useRef<number>(Date.now());
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isOwnProfile = user && myProfile?.username === username;
 
@@ -263,11 +266,10 @@ export default function ProfilePage() {
         } as ChatMsg;
       });
       
-      // Only show messages from current session (after page load)
-      const sessionStart = Date.now() - 30000; // Last 30 seconds
+      // ONLY show messages from current session (after login)
       const sessionMsgs = allMsgs.filter(msg => 
-        msg.createdAt.getTime() > sessionStart || 
-        (msg.senderUid === user?.uid) // Always show own messages
+        msg.createdAt.getTime() > sessionStartTime.current || 
+        (msg.senderUid === user?.uid && msg.createdAt.getTime() > sessionStartTime.current) // Only show own messages from this session
       );
       
       // Update user activity tracking
@@ -309,9 +311,13 @@ export default function ProfilePage() {
       
       setMessages(finalMsgs);
       
-      // Auto-select first conversation if none selected
+      // Auto-select first conversation ONLY if there are current session messages
       if (!activeConversation && sessionMsgs.length > 0) {
-        const uniqueSenders = [...new Set(sessionMsgs.map(m => m.senderUid).filter(Boolean))];
+        const uniqueSenders = [...new Set(sessionMsgs
+          .filter(m => m.senderUid !== user?.uid)
+          .map(m => m.senderUid)
+          .filter(Boolean)
+        )];
         if (uniqueSenders.length > 0) {
           setActiveConversation(uniqueSenders[0]);
         }
@@ -821,10 +827,14 @@ export default function ProfilePage() {
           {/* Profile Owner: Tabbed chat interface */}
           {isOwnProfile ? (
             <div className="chat_box">
-              {/* Conversation tabs - only show anonymous users */}
+              {/* Conversation tabs - ONLY show users with current session messages */}
               {(() => {
-                // Only get senders who are NOT the profile owner (anonymous users only)
-                const uniqueSenders = [...new Set(messages.filter(m => m.senderUid !== user?.uid).map(m => m.senderUid).filter(Boolean) as string[])];
+                // Only get senders who have sent messages in CURRENT SESSION
+                const uniqueSenders = [...new Set(messages
+                  .filter(m => m.senderUid !== user?.uid && !m.text.includes('left the conversation'))
+                  .map(m => m.senderUid)
+                  .filter(Boolean) as string[]
+                )];
                 const availableSenders = uniqueSenders.filter(s => !blockedSenders.has(s));
                 return availableSenders.length > 0 && (
                   <div className="chat-tabs">
