@@ -250,10 +250,16 @@ export default function ProfilePage() {
         
         // Use consistent anonymous names from senderUid
         let senderName = data.sender || 'Anoniem';
-        if (data.senderUid && data.senderUid.startsWith('anon_')) {
-          // Extract consistent anonymous name from senderUid
-          const anonId = data.senderUid.replace('anon_', '');
-          senderName = `Anony-${anonId}`;
+        if (data.senderUid) {
+          if (data.senderUid.startsWith('anon_')) {
+            // Extract consistent anonymous name from senderUid
+            const anonId = data.senderUid.replace('anon_', '');
+            senderName = `Anony-${anonId}`;
+          } else if (!user || data.senderUid !== user.uid) {
+            // For non-logged-in users, generate consistent name from senderUid
+            const hash = data.senderUid.substring(0, 8);
+            senderName = `Anony-${hash}`;
+          }
         }
         
         return {
@@ -263,14 +269,19 @@ export default function ProfilePage() {
           text: data.text || '',
           time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
           createdAt: ts,
+          seen: data.seen || false,
         } as ChatMsg;
       });
       
       // ONLY show messages from current session (after login)
-      const sessionMsgs = allMsgs.filter(msg => 
-        msg.createdAt.getTime() > sessionStartTime.current || 
-        (msg.senderUid === user?.uid && msg.createdAt.getTime() > sessionStartTime.current) // Only show own messages from this session
-      );
+      const sessionMsgs = allMsgs.filter(msg => {
+        // For profile owner: only show messages from others, not own messages
+        if (isOwnProfile) {
+          return msg.senderUid !== user?.uid && msg.createdAt.getTime() > sessionStartTime.current;
+        }
+        // For visitors: show all messages from current session
+        return msg.createdAt.getTime() > sessionStartTime.current;
+      });
       
       // Update user activity tracking
       const newActivityMap = new Map<string, number>();
@@ -922,7 +933,9 @@ export default function ProfilePage() {
                               <span>{msg.text}</span>
                             ) : (
                               <>
-                                <strong>{msg.sender}</strong>: {msg.text} <span>{msg.time}</span>
+                                <strong>{msg.sender}</strong>: {msg.text} 
+                                <span className="msg-time">{msg.time}</span>
+                                {msg.seen && <span className="msg-seen">gezien</span>}
                               </>
                             )}
                           </div>

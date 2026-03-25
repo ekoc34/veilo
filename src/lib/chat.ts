@@ -14,6 +14,7 @@ export interface ChatMsg {
   text: string;
   time: string;
   createdAt: Date;
+  seen?: boolean;
 }
 
 export function getAnonId(): string {

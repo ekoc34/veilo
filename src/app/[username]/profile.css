@@ -814,6 +814,29 @@
   padding: 2px 0;
 }
 
+/* --- Message styling to match örnek images --- */
+.chat-msg {
+  padding: 6px 10px;
+  margin: 2px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #333;
+  font-family: Arial, sans-serif;
+}
+
+.msg-time {
+  color: #999;
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+.msg-seen {
+  color: #666;
+  font-size: 11px;
+  font-style: italic;
+  margin-left: 8px;
+}
+
 /* --- Share Bar --- */
 .share-bar {
   width: 730px;
