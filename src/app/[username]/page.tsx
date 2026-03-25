@@ -86,6 +86,7 @@ export default function ProfilePage() {
   const [selectedProfilePic, setSelectedProfilePic] = useState<string | null>(null);
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
+  const [contactUsername, setContactUsername] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const [contactSent, setContactSent] = useState(false);
@@ -1203,59 +1204,57 @@ export default function ProfilePage() {
 
       {/* Contact Modal */}
       {showContact && (
-        <div className="modal-overlay" onClick={() => { setShowContact(false); setContactSent(false); setContactError(''); setContactName(''); setContactEmail(''); setContactMessage(''); }}>
+        <div className="modal-overlay" onClick={() => { setShowContact(false); setContactSent(false); setContactError(''); setContactName(''); setContactUsername(''); setContactEmail(''); setContactMessage(''); }}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span className="modal-header-icon">✉</span>
               Neem contact op
             </div>
-            <div className="modal-contact-body">
-              {contactSent ? (
-                <div style={{ padding: '20px 30px 30px' }}>
-                  <p style={{ color: '#333', fontSize: 14, lineHeight: 1.7 }}>
-                    Bedankt voor je bericht! We nemen zo snel mogelijk contact met je op.
-                  </p>
-                </div>
-              ) : (
-                <div style={{ padding: '20px 30px 30px' }}>
-                  <label className="modal-label">Naam</label>
-                  <input 
-                    type="text" 
-                    className="modal-input"
-                    value={contactName} 
-                    onChange={(e) => setContactName(e.target.value)} 
-                    placeholder="Je naam" 
-                  />
-                  <label className="modal-label">E-mailadres</label>
-                  <input 
-                    type="email" 
-                    className="modal-input"
-                    value={contactEmail} 
-                    onChange={(e) => setContactEmail(e.target.value)} 
-                    placeholder="E-mailadres" 
-                  />
-                  <label className="modal-label">Je bericht</label>
-                  <textarea 
-                    className="modal-textarea"
-                    value={contactMessage} 
-                    onChange={(e) => setContactMessage(e.target.value)} 
-                    placeholder="Je bericht"
-                    rows={5}
-                  />
-                  {contactError && (
-                    <div className="contact-error">
-                      ⚠ {contactError}
-                    </div>
-                  )}
-                  <button 
-                    className="modal-submit" 
-                    onClick={handleContactSubmit}
-                  >
-                    Verstuur
-                  </button>
-                </div>
-              )}
-            </div>
+            {contactSent ? (
+              <div style={{ padding: '20px 30px 30px' }}>
+                <p style={{ color: '#333', fontSize: 14, lineHeight: 1.7 }}>
+                  Bedankt voor je bericht! We nemen zo snel mogelijk contact met je op.
+                </p>
+              </div>
+            ) : (
+              <div style={{ padding: '20px 30px 30px' }}>
+                <label className="modal-label">Naam</label>
+                <input
+                  type="text"
+                  className="modal-input"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                />
+                <label className="modal-label">Gebruikersnaam</label>
+                <input
+                  type="text"
+                  className="modal-input"
+                  value={contactUsername}
+                  onChange={(e) => setContactUsername(e.target.value)}
+                />
+                <p style={{ fontSize: 12, color: '#999', margin: '-8px 0 12px 0' }}>Geen lid? Laat dit veld leeg.</p>
+                <label className="modal-label">E-mail</label>
+                <input
+                  type="email"
+                  className="modal-input"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                />
+                <label className="modal-label">Bericht</label>
+                <textarea
+                  className="modal-textarea"
+                  value={contactMessage}
+                  onChange={(e) => setContactMessage(e.target.value)}
+                  rows={4}
+                />
+                <button
+                  className="modal-submit"
+                  onClick={() => { if (contactName.trim() && contactEmail.trim() && contactMessage.trim()) setContactSent(true); }}
+                >
+                  Verstuur
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
