@@ -767,38 +767,38 @@ export default function ProfilePage() {
               {settingsTab === 'general' && (
                 <div className="settings-form">
                   <div className="settings-row">
-                    <label>Isim</label>
+                    <label>Naam</label>
                     <div className="settings-field">
-                      <input type="text" value={settingsName} onChange={(e) => setSettingsName(e.target.value)} placeholder="Serhat arın" />
-                      <span>İsim soyisim belirtirsen aramalarda daha kolay bulunursun.</span>
+                      <input type="text" value={settingsName} onChange={(e) => setSettingsName(e.target.value)} placeholder="Naam" />
+                      <span>Je bent makkelijker te vinden als je je naam invult.</span>
                     </div>
                   </div>
                   <div className="settings-row">
                     <label>E-mail</label>
                     <div className="settings-field">
-                      <input type="email" value={settingsEmail} onChange={(e) => setSettingsEmail(e.target.value)} placeholder="serhat_arin_22@hotmail.com" />
-                      <span>Lütfen seninle iletişim kurabileceğimiz bir adres gir.</span>
+                      <input type="email" value={settingsEmail} onChange={(e) => setSettingsEmail(e.target.value)} placeholder="E-mailadres" />
+                      <span>Vul een e-mailadres in zodat we contact kunnen opnemen.</span>
                     </div>
                   </div>
                   <div className="settings-row">
-                    <label>Şehir</label>
+                    <label>Stad</label>
                     <div className="settings-field">
-                      <input type="text" value={settingsCity} onChange={(e) => setSettingsCity(e.target.value)} placeholder="Nerede Yaşıyorsun ?" />
-                      <span>Nerede yaşıyorsun ?</span>
+                      <input type="text" value={settingsCity} onChange={(e) => setSettingsCity(e.target.value)} placeholder="Waar woon je?" />
+                      <span>Waar woon je?</span>
                     </div>
                   </div>
                   <div className="settings-row">
                     <label>Bio</label>
                     <div className="settings-field">
                       <textarea value={settingsBio} onChange={(e) => setSettingsBio(e.target.value)} />
-                      <span>Kendinden bahset ki insanlar seni tanısın.</span>
+                      <span>Vertel iets over jezelf zodat mensen je leren kennen.</span>
                     </div>
                   </div>
                   <div className="settings-row">
-                    <label>Çevrimdışı Mesaj</label>
+                    <label>Offline bericht</label>
                     <div className="settings-field">
-                      <textarea value={settingsOffline} onChange={(e) => setSettingsOffline(e.target.value)} placeholder="Mesela saat kaçta tekrar çevrimiçi olacağını yazabilirsin." />
-                      <span>Çevrimiçi değilken profilinde görünecek mesaj.</span>
+                      <textarea value={settingsOffline} onChange={(e) => setSettingsOffline(e.target.value)} placeholder="Bijv. wanneer je weer online bent." />
+                      <span>Dit bericht wordt getoond als je offline bent.</span>
                     </div>
                   </div>
                   <div className="settings-row">
