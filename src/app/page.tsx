@@ -75,6 +75,8 @@ export default function HomePage() {
   const [searchActive, setSearchActive] = useState(false);
 
   /* ── Modal state ── */
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
@@ -84,6 +86,15 @@ export default function HomePage() {
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const [contactSent, setContactSent] = useState(false);
+
+  // Check for contact URL parameter
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('contact=true')) {
+      setShowContactModal(true);
+      // Clean up the URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   /* ── Slogan animation ── */
   const [activeSloganIdx, setActiveSloganIdx] = useState(0);

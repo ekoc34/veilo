@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { Conversation, ChatMsg, getAnonId, generateAnonName } from '@/lib/chat';
 import './profile.css';
@@ -475,18 +476,35 @@ export default function ProfilePage() {
     setShowBlockConfirm(null);
   }
 
-  function handleProfilePicChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleProfilePicChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file && isOwnProfile && profileData?.uid) {
-      // Create preview URL for immediate display
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setSelectedProfilePic(result);
-        // TODO: Upload to Firebase Storage and update profile in Firestore
-        console.log('Profile picture change:', file);
-      };
-      reader.readAsDataURL(file);
+      try {
+        // Create preview URL for immediate display
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          setSelectedProfilePic(result);
+        };
+        reader.readAsDataURL(file);
+
+        // Upload to Firebase Storage
+        const storagePath = `profile-pictures/${profileData.uid}`;
+        const storageReference = storageRef(storage, storagePath);
+        
+        await uploadBytes(storageReference, file);
+        const downloadURL = await getDownloadURL(storageReference);
+        
+        // Update profile in Firestore
+        await updateDoc(doc(db, 'users', profileData.uid), {
+          profilePicture: downloadURL,
+          updatedAt: serverTimestamp()
+        });
+        
+        console.log('Profile picture updated permanently:', downloadURL);
+      } catch (error) {
+        console.error('Error uploading profile picture:', error);
+      }
     }
   }
 
@@ -839,6 +857,7 @@ export default function ProfilePage() {
             {isOwnProfile && showProfilePicChange && (
               <div className="profile_pic_change_overlay">
                 <div className="profile_pic_change_file">
+                  <img src="/images/icon-camera.svg" alt="Camera" className="profile_pic_change_camera" />
                   <span>Foto wijzigen</span>
                 </div>
               </div>
@@ -1133,7 +1152,10 @@ export default function ProfilePage() {
             <span>VEILO © {new Date().getFullYear()}</span>
             <ul>
               <li>
-                <Link href="/beleid" target="_blank">Help</Link>
+                <Link href="/" onClick={(e) => {
+                  e.preventDefault();
+                  window.location.href = '/?contact=true';
+                }}>Help</Link>
               </li>
             </ul>
           </div>
