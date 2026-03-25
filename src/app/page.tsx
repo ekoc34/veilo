@@ -453,7 +453,7 @@ export default function HomePage() {
 
         {/* ═══════ FOOTER ═══════ */}
         <div className="hfooter">
-          <p>VEILO © {new Date().getFullYear()}</p>
+          <p>Veilo © 2026</p>
           <ul>
             <li>
               <a onClick={() => setShowContactModal(true)} style={{ cursor: 'pointer' }}>Contact</a>

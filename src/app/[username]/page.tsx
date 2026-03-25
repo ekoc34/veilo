@@ -1165,7 +1165,7 @@ export default function ProfilePage() {
 
           {/* ═══════ FOOTER ═══════ */}
           <div className="prof-footer">
-            <span>VEILO © {new Date().getFullYear()}</span>
+            <span>Veilo © 2026</span>
             <ul>
               <li>
                 <a 
