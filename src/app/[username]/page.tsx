@@ -107,27 +107,8 @@ export default function ProfilePage() {
     }))
   );
 
-  /* Load profile: use auth context instantly for own profile, Firestore for others */
+  /* Load profile: fetch from Firestore to ensure latest data, especially for profile picture */
   useEffect(() => {
-    // If this is the logged-in user's own profile, use cached auth data immediately
-    if (myProfile && myProfile.username === username) {
-      setProfileData({
-        uid: myProfile.uid,
-        displayName: myProfile.name || username,
-        username: myProfile.username,
-        bio: myProfile.bio || '',
-        followers: myProfile.followers || 0,
-        profileImg: myProfile.profileImg || '/images/default-avatar.svg',
-        veil1: 0,
-        veil2: 0,
-        veil3: 0,
-        veil4: 0,
-      });
-      setProfileLoading(false);
-      return;
-    }
-
-    // For other users, query Firestore
     async function loadProfile() {
       setProfileLoading(true);
       try {
@@ -151,14 +132,15 @@ export default function ProfilePage() {
         } else {
           setProfileNotFound(true);
         }
-      } catch {
+      } catch (error) {
+        console.error('Error loading profile:', error);
         setProfileNotFound(true);
       } finally {
         setProfileLoading(false);
       }
     }
     loadProfile();
-  }, [username, myProfile]);
+  }, [username]);
 
   /* Load conversations for profile owner */
   useEffect(() => {
@@ -501,18 +483,18 @@ export default function ProfilePage() {
         await uploadBytes(storageReference, file);
         const downloadURL = await getDownloadURL(storageReference);
         
-        // Update profile in Firestore
-        await updateDoc(doc(db, 'users', profileData.uid), {
+        // Update profile in Firestore with merge: true to ensure it works even if doc structure is slightly different
+        await setDoc(doc(db, 'users', profileData.uid), {
           profileImg: downloadURL,
           updatedAt: serverTimestamp()
-        });
+        }, { merge: true });
 
-        // Update state to show the new image immediately
+        // Update local state for immediate feedback
         setProfileData(prev => prev ? { ...prev, profileImg: downloadURL } : prev);
         
-        console.log('Profile picture updated permanently:', downloadURL);
+        console.log('Profile picture updated successfully:', downloadURL);
       } catch (error) {
-        console.error('Error uploading profile picture:', error);
+        console.error('Error in handleProfilePicChange:', error);
       }
     }
   }
@@ -1193,73 +1175,57 @@ export default function ProfilePage() {
 
       {/* Contact Modal */}
       {showContact && (
-        <div className="modal-overlay" onClick={() => setShowContact(false)}>
-          <div className="modal-contact" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-contact-head">
-              <h2>Contact</h2>
-              <a className="modal-close" onClick={() => setShowContact(false)}>✕</a>
+        <div className="modal-overlay" onClick={() => { setShowContact(false); setContactSent(false); setContactError(''); setContactName(''); setContactEmail(''); setContactMessage(''); }}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-header-icon">✉</span>
+              Neem contact op
             </div>
             <div className="modal-contact-body">
               {contactSent ? (
-                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{ padding: '20px 30px 30px' }}>
                   <p style={{ color: '#333', fontSize: 14, lineHeight: 1.7 }}>
                     Bedankt voor je bericht! We nemen zo snel mogelijk contact met je op.
                   </p>
-                  <button 
-                    className="settings-btn" 
-                    style={{ marginTop: 20 }}
-                    onClick={() => setShowContact(false)}
-                  >
-                    Sluiten
-                  </button>
                 </div>
               ) : (
-                <form onSubmit={handleContactSubmit}>
-                  <div className="settings-row">
-                    <label>Je naam</label>
-                    <div className="settings-field">
-                      <input 
-                        type="text" 
-                        value={contactName} 
-                        onChange={(e) => setContactName(e.target.value)} 
-                        placeholder="Je naam" 
-                      />
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <label>E-mailadres</label>
-                    <div className="settings-field">
-                      <input 
-                        type="email" 
-                        value={contactEmail} 
-                        onChange={(e) => setContactEmail(e.target.value)} 
-                        placeholder="E-mailadres" 
-                      />
-                    </div>
-                  </div>
-                  <div className="settings-row">
-                    <label>Je bericht</label>
-                    <div className="settings-field">
-                      <textarea 
-                        value={contactMessage} 
-                        onChange={(e) => setContactMessage(e.target.value)} 
-                        placeholder="Je bericht"
-                        rows={5}
-                      />
-                    </div>
-                  </div>
+                <div style={{ padding: '20px 30px 30px' }}>
+                  <label className="modal-label">Naam</label>
+                  <input 
+                    type="text" 
+                    className="modal-input"
+                    value={contactName} 
+                    onChange={(e) => setContactName(e.target.value)} 
+                    placeholder="Je naam" 
+                  />
+                  <label className="modal-label">E-mailadres</label>
+                  <input 
+                    type="email" 
+                    className="modal-input"
+                    value={contactEmail} 
+                    onChange={(e) => setContactEmail(e.target.value)} 
+                    placeholder="E-mailadres" 
+                  />
+                  <label className="modal-label">Je bericht</label>
+                  <textarea 
+                    className="modal-textarea"
+                    value={contactMessage} 
+                    onChange={(e) => setContactMessage(e.target.value)} 
+                    placeholder="Je bericht"
+                    rows={5}
+                  />
                   {contactError && (
                     <div className="contact-error">
                       ⚠ {contactError}
                     </div>
                   )}
-                  <div className="settings-row">
-                    <label></label>
-                    <div className="settings-field">
-                      <button type="submit" className="settings-btn">Verstuur</button>
-                    </div>
-                  </div>
-                </form>
+                  <button 
+                    className="modal-submit" 
+                    onClick={handleContactSubmit}
+                  >
+                    Verstuur
+                  </button>
+                </div>
               )}
             </div>
           </div>

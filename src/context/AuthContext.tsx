@@ -44,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const data = docSnap.data();
+            console.log('Fetched profile data from Firestore:', data);
             setProfile({
               uid: firebaseUser.uid,
               name: data.name || firebaseUser.displayName || '',
