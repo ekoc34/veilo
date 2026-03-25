@@ -828,19 +828,32 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: Arial, sans-serif;
+  padding-bottom: 10px;
   cursor: pointer;
   transition: opacity 0.2s ease;
 }
 
-.profile_pic_change_overlay span {
-  text-align: center;
-  padding: 0 10px;
+.profile_pic_change_file {
+  background: #fff;
+  color: #333;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: Arial, sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.profile_pic_change_file:hover {
+  background: #f5f5f5;
+}
+
+.profile_pic_change_file span {
+  white-space: nowrap;
 }
 
 /* --- Message styling to match örnek images --- */

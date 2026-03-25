@@ -82,6 +82,7 @@ export default function ProfilePage() {
   const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
   const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
   const [showProfilePicChange, setShowProfilePicChange] = useState(false);
+  const [selectedProfilePic, setSelectedProfilePic] = useState<string | null>(null);
   
   // Track session start time for clean state
   const sessionStartTime = useRef<number>(Date.now());
@@ -477,9 +478,15 @@ export default function ProfilePage() {
   function handleProfilePicChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file && isOwnProfile && profileData?.uid) {
-      // TODO: Upload to storage and update profile
-      console.log('Profile picture change:', file);
-      // For now, just log the file
+      // Create preview URL for immediate display
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setSelectedProfilePic(result);
+        // TODO: Upload to Firebase Storage and update profile in Firestore
+        console.log('Profile picture change:', file);
+      };
+      reader.readAsDataURL(file);
     }
   }
 
@@ -826,12 +833,14 @@ export default function ProfilePage() {
             style={{ cursor: isOwnProfile ? 'pointer' : 'default' }}
           >
             <img
-              src={profileImg}
+              src={selectedProfilePic || profileImg}
               alt={`${displayName} profielfoto`}
             />
             {isOwnProfile && showProfilePicChange && (
               <div className="profile_pic_change_overlay">
-                <span>Foto wijzigen</span>
+                <div className="profile_pic_change_file">
+                  <span>Foto wijzigen</span>
+                </div>
               </div>
             )}
           </div>
