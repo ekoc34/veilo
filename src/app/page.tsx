@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signInWithPopup, FacebookAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import './home.css';
@@ -95,6 +95,75 @@ export default function HomePage() {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  /* ── Online Users state ── */
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [filteredOnlineUsers, setFilteredOnlineUsers] = useState<any[]>([]);
+
+  /* Fetch all users for search and online status */
+  useEffect(() => {
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snap) => {
+      const usersData = snap.docs.map(doc => ({
+        uid: doc.id,
+        ...(doc.data() as any)
+      }));
+
+      // Filter for online users (active in last 5 minutes)
+      const now = Date.now();
+      const online = usersData
+        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000)
+        .map(u => ({
+          username: u.username || '',
+          img: u.profileImg || '/images/default-avatar.svg',
+          displayName: u.displayName || u.username || '',
+          bio: u.bio || '',
+          city: u.city || ''
+        }));
+      setOnlineUsers(online);
+      setFilteredOnlineUsers(online);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  /* Real-time Search Logic */
+  useEffect(() => {
+    if (!searchActive || !searchQuery.trim()) {
+      setFilteredOnlineUsers(onlineUsers);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filtered = onlineUsers.filter(u => 
+      u.displayName.toLowerCase().includes(query) ||
+      u.bio.toLowerCase().includes(query) ||
+      u.city.toLowerCase().includes(query)
+    );
+    setFilteredOnlineUsers(filtered);
+  }, [searchQuery, searchActive, onlineUsers]);
+
+  /* ── Online Status Tracking ── */
+  useEffect(() => {
+    if (!user) return;
+
+    const userRef = doc(db, 'users', user.uid);
+    
+    // Update lastSeen every 2 minutes
+    const updateLastSeen = async () => {
+      try {
+        await updateDoc(userRef, {
+          lastSeen: serverTimestamp()
+        });
+      } catch (err) {
+        console.error('Error updating lastSeen:', err);
+      }
+    };
+
+    updateLastSeen();
+    const interval = setInterval(updateLastSeen, 120000);
+    
+    return () => clearInterval(interval);
+  }, [user]);
 
   /* ── Slogan animation ── */
   const [activeSloganIdx, setActiveSloganIdx] = useState(0);
@@ -357,13 +426,23 @@ export default function HomePage() {
           {/* User grid */}
           <div className="home_pop_list">
             <ul id="randoms">
-              {DEMO_USERS.map((u) => (
-                <li key={u.username} title={u.username}>
+              {filteredOnlineUsers.map((u, i) => (
+                <li key={u.username || i} title={u.username} className="online-item">
                   <Link href={`/${u.username}`} target="_blank">
-                    <img src={u.img} alt={`${u.alt} profielfoto`} />
+                    <img src={u.img} alt={`${u.displayName} profielfoto`} />
+                    <div className="online-tooltip">
+                      <strong>{u.displayName}</strong>
+                      {u.bio && <p>{u.bio}</p>}
+                    </div>
                   </Link>
                 </li>
               ))}
+              {filteredOnlineUsers.length === 0 && !searchActive && (
+                <p style={{ color: '#999', fontSize: 13, padding: '20px 0' }}>Geen online gebruikers op dit moment.</p>
+              )}
+              {filteredOnlineUsers.length === 0 && searchActive && (
+                <p style={{ color: '#999', fontSize: 13, padding: '20px 0' }}>Geen gebruikers gevonden voor "{searchQuery}".</p>
+              )}
             </ul>
           </div>
         </div>

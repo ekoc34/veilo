@@ -674,9 +674,13 @@ export default function ProfilePage() {
 
   /* Online list items */
   const onlineListItems = filteredOnlineUsers.map((u, i) => (
-    <li key={u.username || i}>
+    <li key={u.username || i} className="online-item">
       <Link href={`/${u.username}`}>
         <img src={u.img} alt={u.alt} />
+        <div className="online-tooltip">
+          <strong>{u.displayName}</strong>
+          {u.bio && <p>{u.bio}</p>}
+        </div>
       </Link>
     </li>
   ));

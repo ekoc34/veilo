@@ -1142,21 +1142,72 @@
 }
 
 .online_list ul li {
-  display: block;
   position: relative;
-  border-radius: 3px;
-  width: 66px;
-  height: 66px;
-  padding: 3px;
-  margin: 0 0 6px 10px;
-  float: left;
+  display: inline-block;
+  margin: 3px;
 }
 
-.online_list ul li a img {
-  width: 66px;
-  height: 66px;
-  float: left;
-  border-radius: 3px;
+.online_list ul li img {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.online-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1000;
+  margin-bottom: 8px;
+  font-size: 12px;
+  min-width: 120px;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.online-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: rgba(0, 0, 0, 0.9) transparent transparent transparent;
+}
+
+.online-item:hover .online-tooltip {
+  opacity: 1;
+  visibility: visible;
+  bottom: calc(100% + 5px);
+}
+
+.online-tooltip strong {
+  display: block;
+  font-weight: 800;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.online-tooltip p {
+  margin: 0;
+  font-weight: 400;
+  color: #ccc;
+  font-size: 11px;
+  line-height: 1.4;
+  max-width: 200px;
+  white-space: normal;
 }
 
 .online_list ul li a:hover img {
