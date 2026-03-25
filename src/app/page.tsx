@@ -441,7 +441,7 @@ export default function HomePage() {
                 <p style={{ color: '#999', fontSize: 13, padding: '20px 0' }}>Geen online gebruikers op dit moment.</p>
               )}
               {filteredOnlineUsers.length === 0 && searchActive && (
-                <p style={{ color: '#999', fontSize: 13, padding: '20px 0' }}>Geen gebruikers gevonden voor "{searchQuery}".</p>
+                <p style={{ color: '#999', fontSize: 13, padding: '20px 0' }}>Geen gebruikers gevonden voor &quot;{searchQuery}&quot;.</p>
               )}
             </ul>
           </div>
