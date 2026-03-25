@@ -234,6 +234,10 @@ export default function ProfilePage() {
     const chatId = profileData.uid;
     const msgsRef = collection(db, 'chats', chatId, 'messages');
     
+    // Clear messages on component mount (page refresh)
+    setMessages([]);
+    setActiveConversation(null);
+    
     const q = query(msgsRef, orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allMsgs = snapshot.docs.map((d) => {
@@ -256,7 +260,33 @@ export default function ProfilePage() {
         (msg.senderUid === user?.uid) // Always show own messages
       );
       
-      setMessages(sessionMsgs);
+      // Check for users who left (no messages in last 30 seconds)
+      const activeSenders = new Set(sessionMsgs.map(m => m.senderUid).filter(Boolean));
+      const allRecentSenders = new Set(allMsgs.filter(m => m.createdAt.getTime() > sessionStart).map(m => m.senderUid).filter(Boolean));
+      
+      const leftUsers = [...allRecentSenders].filter(sender => !activeSenders.has(sender) && sender !== user?.uid);
+      
+      // Add "left conversation" messages
+      const leftMsgs = leftUsers.map(sender => {
+        const senderMsgs = allMsgs.filter(m => m.senderUid === sender);
+        const senderName = senderMsgs[0]?.sender || 'Anoniem';
+        const isAnonymous = senderName.startsWith('Anony-');
+        const leftText = isAnonymous ? 'Anonymous left the conversation' : `${senderName} left the conversation`;
+        
+        return {
+          id: `left-${sender}`,
+          sender: '',
+          senderUid: sender,
+          text: leftText,
+          time: '',
+          createdAt: new Date(),
+        } as ChatMsg;
+      });
+      
+      // Combine regular messages with left messages
+      const finalMsgs = [...sessionMsgs, ...leftMsgs].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      
+      setMessages(finalMsgs);
       
       // Auto-select first conversation if none selected
       if (!activeConversation && sessionMsgs.length > 0) {
@@ -267,7 +297,7 @@ export default function ProfilePage() {
       }
     });
     return () => unsubscribe();
-  }, [isOwnProfile, profileData?.uid, activeConversation, user?.uid]);
+  }, [isOwnProfile, profileData?.uid, user?.uid]);
 
   /* Clear messages when page closes (for visitors) */
   useEffect(() => {
@@ -852,8 +882,14 @@ export default function ProfilePage() {
                     ) : (
                       <>
                         {activeMsgs.map((msg) => (
-                          <div key={msg.id} className="chat-msg">
-                            <strong>{msg.sender}</strong>: {msg.text} <span>{msg.time}</span>
+                          <div key={msg.id} className={msg.text.includes('left the conversation') ? 'chat-msg user-left' : 'chat-msg'}>
+                            {msg.text.includes('left the conversation') ? (
+                              <span>{msg.text}</span>
+                            ) : (
+                              <>
+                                <strong>{msg.sender}</strong>: {msg.text} <span>{msg.time}</span>
+                              </>
+                            )}
                           </div>
                         ))}
                         {/* Block button at bottom */}
