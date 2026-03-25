@@ -84,6 +84,12 @@ export default function ProfilePage() {
   const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
   const [showProfilePicChange, setShowProfilePicChange] = useState(false);
   const [selectedProfilePic, setSelectedProfilePic] = useState<string | null>(null);
+  const [showContact, setShowContact] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSent, setContactSent] = useState(false);
+  const [contactError, setContactError] = useState('');
   
   // Track session start time for clean state
   const sessionStartTime = useRef<number>(Date.now());
@@ -497,15 +503,32 @@ export default function ProfilePage() {
         
         // Update profile in Firestore
         await updateDoc(doc(db, 'users', profileData.uid), {
-          profilePicture: downloadURL,
+          profileImg: downloadURL,
           updatedAt: serverTimestamp()
         });
+
+        // Update state to show the new image immediately
+        setProfileData(prev => prev ? { ...prev, profileImg: downloadURL } : prev);
         
         console.log('Profile picture updated permanently:', downloadURL);
       } catch (error) {
         console.error('Error uploading profile picture:', error);
       }
     }
+  }
+
+  async function handleContactSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setContactError('');
+
+    if (!contactName.trim() || !contactEmail.trim() || !contactMessage.trim()) {
+      setContactError('Alle velden zijn verplicht.');
+      return;
+    }
+
+    // Simulate sending
+    setContactSent(true);
+    // Reset after some time or on close
   }
 
   function triggerProfilePicChange() {
@@ -1152,15 +1175,96 @@ export default function ProfilePage() {
             <span>VEILO © {new Date().getFullYear()}</span>
             <ul>
               <li>
-                <Link href="/" onClick={(e) => {
-                  e.preventDefault();
-                  window.location.href = '/?contact=true';
-                }}>Help</Link>
+                <a 
+                  style={{ cursor: 'pointer' }} 
+                  onClick={() => {
+                    setShowContact(true);
+                    setContactSent(false);
+                    setContactError('');
+                  }}
+                >
+                  Help
+                </a>
               </li>
             </ul>
           </div>
         </div>
       </div>
+
+      {/* Contact Modal */}
+      {showContact && (
+        <div className="modal-overlay" onClick={() => setShowContact(false)}>
+          <div className="modal-contact" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-contact-head">
+              <h2>Contact</h2>
+              <a className="modal-close" onClick={() => setShowContact(false)}>✕</a>
+            </div>
+            <div className="modal-contact-body">
+              {contactSent ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <p style={{ color: '#333', fontSize: 14, lineHeight: 1.7 }}>
+                    Bedankt voor je bericht! We nemen zo snel mogelijk contact met je op.
+                  </p>
+                  <button 
+                    className="settings-btn" 
+                    style={{ marginTop: 20 }}
+                    onClick={() => setShowContact(false)}
+                  >
+                    Sluiten
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleContactSubmit}>
+                  <div className="settings-row">
+                    <label>Je naam</label>
+                    <div className="settings-field">
+                      <input 
+                        type="text" 
+                        value={contactName} 
+                        onChange={(e) => setContactName(e.target.value)} 
+                        placeholder="Je naam" 
+                      />
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <label>E-mailadres</label>
+                    <div className="settings-field">
+                      <input 
+                        type="email" 
+                        value={contactEmail} 
+                        onChange={(e) => setContactEmail(e.target.value)} 
+                        placeholder="E-mailadres" 
+                      />
+                    </div>
+                  </div>
+                  <div className="settings-row">
+                    <label>Je bericht</label>
+                    <div className="settings-field">
+                      <textarea 
+                        value={contactMessage} 
+                        onChange={(e) => setContactMessage(e.target.value)} 
+                        placeholder="Je bericht"
+                        rows={5}
+                      />
+                    </div>
+                  </div>
+                  {contactError && (
+                    <div className="contact-error">
+                      ⚠ {contactError}
+                    </div>
+                  )}
+                  <div className="settings-row">
+                    <label></label>
+                    <div className="settings-field">
+                      <button type="submit" className="settings-btn">Verstuur</button>
+                    </div>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Block Confirmation Dialog */}
       {showBlockConfirm && (

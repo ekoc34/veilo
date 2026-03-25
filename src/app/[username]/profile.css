@@ -601,6 +601,43 @@
   height: 16px;
 }
 
+/* --- Contact Modal --- */
+.modal-contact {
+  background: #fff;
+  width: 500px;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+.modal-contact-head {
+  padding: 15px 20px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-contact-head h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #262A51;
+}
+
+.modal-contact-body {
+  padding: 20px;
+}
+
+.contact-error {
+  background: #D35757;
+  color: #fff;
+  padding: 8px 15px;
+  border-radius: 3px;
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
 /* --- Block Confirmation Dialog --- */
 .block-confirm-overlay {
   position: fixed;
@@ -822,47 +859,48 @@
 
 .profile_pic_change_overlay {
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  height: 36px;
+  background: rgba(0, 0, 0, 0.85);
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 10px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 10px;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: background-color 0.2s ease;
+  z-index: 5;
 }
 
 .profile_pic_change_file {
-  background: #fff;
-  color: #333;
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: Arial, sans-serif;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  background: transparent;
+  color: #fff;
+  padding: 0;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  box-shadow: none;
   cursor: pointer;
-  transition: background-color 0.2s ease;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .profile_pic_change_file:hover {
-  background: #f5f5f5;
+  background: transparent;
 }
 
 .profile_pic_change_camera {
-  width: 16px;
-  height: 16px;
-  opacity: 0.7;
+  width: 18px;
+  height: 18px;
+  filter: invert(1);
 }
 
 .profile_pic_change_file span {
   white-space: nowrap;
+  color: #28A0C8; /* Matches the theme color for links */
 }
 
 /* --- Message styling to match örnek images --- */
