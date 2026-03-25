@@ -839,32 +839,33 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 38px;
-  background: rgba(0, 0, 0, 0.85);
+  height: 40px; /* Adjusted to match the ratio in the photo */
+  background: #000000; /* Solid black */
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0 12px;
+  padding: 0 15px; /* Spacing from left edge */
   cursor: pointer;
-  z-index: 5;
+  z-index: 10;
 }
 
 .profile_pic_change_file {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px; /* Gap between icon and text */
 }
 
 .profile_pic_change_camera {
-  width: 18px;
+  width: 22px; /* Adjusted size to match the photo */
   height: 18px;
-  filter: brightness(0) invert(1); /* Ensure the icon is white */
+  filter: brightness(0) invert(1); /* Keep the icon pure white */
+  opacity: 1;
 }
 
 .profile_pic_change_file span {
   white-space: nowrap;
-  color: #28A0C8; /* Theme blue */
-  font-size: 13px;
+  color: #28A0C8; /* Vibrant theme blue */
+  font-size: 14px; /* Matches the text size in the photo */
   font-weight: 500;
   font-family: Arial, sans-serif;
 }
