@@ -227,7 +227,7 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [isOwnProfile, profileData?.uid]);
 
-  /* Profile owner: listen to all messages and maintain persistent conversations */
+  /* Profile owner: session-only messages - clear on refresh */
   useEffect(() => {
     if (!isOwnProfile || !profileData?.uid) return;
     
@@ -248,18 +248,26 @@ export default function ProfilePage() {
           createdAt: ts,
         } as ChatMsg;
       });
-      setMessages(allMsgs);
+      
+      // Only show messages from current session (after page load)
+      const sessionStart = Date.now() - 30000; // Last 30 seconds
+      const sessionMsgs = allMsgs.filter(msg => 
+        msg.createdAt.getTime() > sessionStart || 
+        (msg.senderUid === user?.uid) // Always show own messages
+      );
+      
+      setMessages(sessionMsgs);
       
       // Auto-select first conversation if none selected
-      if (!activeConversation && allMsgs.length > 0) {
-        const uniqueSenders = [...new Set(allMsgs.map(m => m.senderUid).filter(Boolean))];
+      if (!activeConversation && sessionMsgs.length > 0) {
+        const uniqueSenders = [...new Set(sessionMsgs.map(m => m.senderUid).filter(Boolean))];
         if (uniqueSenders.length > 0) {
           setActiveConversation(uniqueSenders[0]);
         }
       }
     });
     return () => unsubscribe();
-  }, [isOwnProfile, profileData?.uid, activeConversation]);
+  }, [isOwnProfile, profileData?.uid, activeConversation, user?.uid]);
 
   /* Clear messages when page closes (for visitors) */
   useEffect(() => {
@@ -368,6 +376,16 @@ export default function ProfilePage() {
     }
   }
 
+  function closeConversation(senderUid: string) {
+    // Remove conversation from active state
+    if (activeConversation === senderUid) {
+      const remainingSenders = [...new Set(messages.map(m => m.senderUid).filter(Boolean) as string[])].filter(s => s !== senderUid && !blockedSenders.has(s));
+      setActiveConversation(remainingSenders.length > 0 ? remainingSenders[0] : null);
+    }
+    // Remove messages from this sender
+    setMessages(prev => prev.filter(m => m.senderUid !== senderUid));
+  }
+
   function showBlockConfirmation(senderUid: string) {
     setShowBlockConfirm(senderUid);
   }
@@ -379,6 +397,8 @@ export default function ProfilePage() {
       const remainingSenders = [...new Set(messages.map(m => m.senderUid).filter(Boolean) as string[])].filter(s => s !== senderUid && !blockedSenders.has(s));
       setActiveConversation(remainingSenders.length > 0 ? remainingSenders[0] : null);
     }
+    // Remove messages from blocked sender
+    setMessages(prev => prev.filter(m => m.senderUid !== senderUid));
     setShowBlockConfirm(null);
   }
 
@@ -762,13 +782,15 @@ export default function ProfilePage() {
                       const senderMsgs = messages.filter(m => m.senderUid === senderUid);
                       const senderName = senderMsgs[0]?.sender || 'Anoniem';
                       return (
-                        <a
-                          key={senderUid}
-                          className={activeConversation === senderUid ? 'active' : ''}
-                          onClick={() => setActiveConversation(senderUid)}
-                        >
-                          {senderName}
-                        </a>
+                        <div key={senderUid} className="chat-tab-wrapper">
+                          <a
+                            className={activeConversation === senderUid ? 'active' : ''}
+                            onClick={() => setActiveConversation(senderUid)}
+                          >
+                            {senderName}
+                          </a>
+                          <a className="chat-tab-close" onClick={() => closeConversation(senderUid)}>✕</a>
+                        </div>
                       );
                     })}
                   </div>
@@ -828,11 +850,19 @@ export default function ProfilePage() {
                         </p>
                       </div>
                     ) : (
-                      activeMsgs.map((msg) => (
-                        <div key={msg.id} className="chat-msg">
-                          <strong>{msg.sender}</strong>: {msg.text} <span>{msg.time}</span>
+                      <>
+                        {activeMsgs.map((msg) => (
+                          <div key={msg.id} className="chat-msg">
+                            <strong>{msg.sender}</strong>: {msg.text} <span>{msg.time}</span>
+                          </div>
+                        ))}
+                        {/* Block button at bottom */}
+                        <div className="chat-block-bottom">
+                          <a className="chat-block-btn" onClick={() => showBlockConfirmation(activeConversation)}>
+                            Blokkeer deze anonieme
+                          </a>
                         </div>
-                      ))
+                      </>
                     );
                   })()
                 )}

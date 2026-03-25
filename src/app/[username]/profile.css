@@ -709,7 +709,7 @@
   color: #666;
 }
 
-/* --- Chat Tabs --- */
+/* --- Chat Tabs with X buttons --- */
 .chat-tabs {
   display: flex;
   border-bottom: 1px solid #ddd;
@@ -719,10 +719,15 @@
   align-items: center;
 }
 
-.chat-tabs a {
+.chat-tab-wrapper {
+  display: flex;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.chat-tab-wrapper > a {
   display: inline-block;
   padding: 6px 12px;
-  margin-right: 2px;
   background: #f5f5f5;
   border: 1px solid #ddd;
   border-bottom: none;
@@ -734,7 +739,7 @@
   white-space: nowrap;
 }
 
-.chat-tabs a.active {
+.chat-tab-wrapper > a.active {
   background: #fff;
   border-color: #ccc;
   margin-bottom: -1px;
@@ -742,8 +747,56 @@
   z-index: 1;
 }
 
-.chat-tabs a:hover:not(.active) {
+.chat-tab-wrapper > a:hover:not(.active) {
   background: #e8e8e8;
+}
+
+.chat-tab-close {
+  margin-left: -8px;
+  margin-right: 8px;
+  color: #999;
+  font-size: 12px;
+  font-weight: bold;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
+}
+
+.chat-tab-close:hover {
+  color: #666;
+  background: #ddd;
+}
+
+/* --- Block button at bottom --- */
+.chat-block-bottom {
+  text-align: center;
+  padding: 10px 0;
+  border-top: 1px solid #eee;
+  margin-top: 10px;
+}
+
+.chat-block-btn {
+  color: #c00;
+  text-decoration: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border: 1px solid #c00;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.chat-block-btn:hover {
+  background: #c00;
+  color: #fff;
+}
+
+/* --- User left message --- */
+.chat-msg.user-left {
+  color: #c00;
+  font-style: italic;
+  font-size: 12px;
 }
 
 /* --- Share Bar --- */
