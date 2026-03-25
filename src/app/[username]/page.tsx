@@ -485,17 +485,20 @@ export default function ProfilePage() {
         reader.readAsDataURL(file);
 
         // Upload to Firebase Storage
-        const storagePath = `profile-pictures/${profileData.uid}`;
+        const storagePath = `profile-pictures/${profileData.uid}_${Date.now()}`; // Use timestamp to force unique URL and avoid cache issues
         const storageReference = storageRef(storage, storagePath);
         
         await uploadBytes(storageReference, file);
         const downloadURL = await getDownloadURL(storageReference);
         
-        // Update profile in Firestore with merge: true to ensure it works even if doc structure is slightly different
-        await setDoc(doc(db, 'users', profileData.uid), {
-          profileImg: downloadURL,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
+        // Update profile in Firestore with merge: true
+        // We use user.uid directly from auth to be 100% sure we are updating the correct logged-in user
+        if (user) {
+          await setDoc(doc(db, 'users', user.uid), {
+            profileImg: downloadURL,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        }
 
         // Update local state for immediate feedback
         setProfileData(prev => prev ? { ...prev, profileImg: downloadURL } : prev);
