@@ -558,7 +558,8 @@ export default function ProfilePage() {
     if (!user) return;
     try {
       await updateDoc(doc(db, 'users', user.uid), {
-        name: settingsName,
+        displayName: settingsName, // Use displayName to match what other users see
+        name: settingsName, // Keep name for backward compatibility if needed
         email: settingsEmail,
         bio: settingsBio,
         city: settingsCity,
@@ -566,7 +567,8 @@ export default function ProfilePage() {
         updatedAt: serverTimestamp()
       });
       setSettingsUpdated(true);
-      // Success message will be shown in the UI
+      // Auto-hide after 3 seconds
+      setTimeout(() => setSettingsUpdated(false), 3000);
     } catch (error) {
       console.error('Error updating settings:', error);
     }
@@ -612,6 +614,11 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-body">
+      {/* Settings Success Notification (Scrolling Down) */}
+      <div className={`settings-success-scroll ${settingsUpdated ? 'visible' : ''}`}>
+        Instellingen zijn succesvol bijgewerkt.
+      </div>
+
       {/* ═══════ HEADER ═══════ */}
       <div className="prof-header">
         <div className="prof-container">
@@ -758,11 +765,6 @@ export default function ProfilePage() {
               <a className={settingsTab === 'privacy' ? 'active' : ''} onClick={() => setSettingsTab('privacy')}>Privacy</a>
               <a className={settingsTab === 'password' ? 'active' : ''} onClick={() => setSettingsTab('password')}>Wachtwoord</a>
             </div>
-            {settingsUpdated && settingsTab === 'general' && (
-              <div className="settings-success-msg">
-                Instellingen zijn succesvol bijgewerkt.
-              </div>
-            )}
             <div className="modal-settings-body">
               {settingsTab === 'general' && (
                 <div className="settings-form">
