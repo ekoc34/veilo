@@ -77,6 +77,10 @@ export default function ProfilePage() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [blockedSenders, setBlockedSenders] = useState<Set<string>>(new Set());
+  const [openConvBoxes, setOpenConvBoxes] = useState<Set<string>>(new Set());
+  const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isOwnProfile = user && myProfile?.username === username;
 
@@ -223,7 +227,7 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [isOwnProfile, profileData?.uid]);
 
-  /* Profile owner: directly listen to chats/{uid}/messages for real-time visitor messages */
+  /* Profile owner: directly listen to chats/{uid}/messages and group by sender */
   useEffect(() => {
     if (!isOwnProfile || !profileData?.uid) return;
     
@@ -245,9 +249,21 @@ export default function ProfilePage() {
         } as ChatMsg;
       });
       setMessages(allMsgs);
+      
+      // Auto-open conversation boxes for new senders (exclude profile owner)
+      const uniqueSenders = new Set(allMsgs.map(m => m.senderUid).filter(Boolean));
+      setOpenConvBoxes(prev => {
+        const newSet = new Set(prev);
+        uniqueSenders.forEach(sender => {
+          if (sender && sender !== user?.uid && !blockedSenders.has(sender)) {
+            newSet.add(sender);
+          }
+        });
+        return newSet;
+      });
     });
     return () => unsubscribe();
-  }, [isOwnProfile, profileData?.uid]);
+  }, [isOwnProfile, profileData?.uid, user?.uid, blockedSenders]);
 
   /* Clear messages when page closes (for visitors) */
   useEffect(() => {
@@ -354,6 +370,28 @@ export default function ProfilePage() {
     } catch {
       /* silently fail */
     }
+  }
+
+  function closeConvBox(senderUid: string) {
+    setOpenConvBoxes(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(senderUid);
+      return newSet;
+    });
+  }
+
+  function showBlockConfirmation(senderUid: string) {
+    setShowBlockConfirm(senderUid);
+  }
+
+  function confirmBlock(senderUid: string) {
+    setBlockedSenders(prev => new Set(prev).add(senderUid));
+    closeConvBox(senderUid);
+    setShowBlockConfirm(null);
+  }
+
+  function cancelBlock() {
+    setShowBlockConfirm(null);
   }
 
   function handleRefresh() {
@@ -719,80 +757,119 @@ export default function ProfilePage() {
 
         {/* ═══════ MAIN CHAT AREA ═══════ */}
         <div className="prof-main">
-          <div className="chat_box">
-            {/* Conversation tabs (only for profile owner) */}
-            {isOwnProfile && conversations.length > 0 && (
-              <div className="chat-tabs">
-                {conversations.map((conv) => (
-                  <a
-                    key={conv.id}
-                    className={activeConvId === conv.id ? 'active' : ''}
-                    onClick={() => setActiveConvId(conv.id)}
-                  >
-                    {conv.blocked ? '🚫 ' : ''}{conv.anonName}
-                    {conv.typing && ' typing...'}
+          {/* Profile Owner: Individual conversation boxes per sender */}
+          {isOwnProfile ? (
+            <div className="conversation-boxes-container">
+              {Array.from(openConvBoxes).map(senderUid => {
+                const senderMsgs = messages.filter(m => m.senderUid === senderUid);
+                if (senderMsgs.length === 0) return null;
+                const senderName = senderMsgs[0]?.sender || 'Anoniem';
+                
+                return (
+                  <div key={senderUid} className="conversation-box">
+                    <div className="conv-header">
+                      <span className="conv-name">{senderName}</span>
+                      <a className="conv-close" onClick={() => closeConvBox(senderUid)}>✕</a>
+                    </div>
+                    <div className="conv-block-row">
+                      <a className="conv-block" onClick={() => showBlockConfirmation(senderUid)}>Blokkeer deze anonieme gebruiker</a>
+                    </div>
+                    <div className="conv-messages">
+                      {senderMsgs.map((msg) => (
+                        <div key={msg.id} className="conv-msg">
+                          <strong>{msg.sender}</strong>: {msg.text} <span>{msg.time}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="conv-input">
+                      <input
+                        type="text"
+                        placeholder="Je bericht"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const input = e.target as HTMLInputElement;
+                            if (input.value.trim()) {
+                              addDoc(collection(db, 'chats', profileData!.uid, 'messages'), {
+                                sender: myProfile?.name || 'Eigenaar',
+                                senderUid: user?.uid,
+                                text: input.value,
+                                createdAt: serverTimestamp(),
+                              });
+                              input.value = '';
+                            }
+                          }
+                        }}
+                      />
+                      <a className="conv-camera" style={{ cursor: 'pointer' }}>
+                        <img src="/images/icon-camera.svg" alt="Foto" />
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Visitor: Single chat box */
+            <div className="chat_box">
+              {/* Input box */}
+              <div className="input_box">
+                <input
+                  type="text"
+                  placeholder="Je bericht"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      sendMessage();
+                      e.preventDefault();
+                    }
+                  }}
+                />
+                <a className="input-camera" style={{ cursor: 'pointer' }}>
+                  <img src="/images/icon-camera.svg" alt="Foto" />
+                </a>
+                {user && !isOwnProfile && (
+                  <a className="input-eye" onClick={() => setRevealIdentity(!revealIdentity)} style={{ cursor: 'pointer' }} title={revealIdentity ? "Verberg identiteit" : "Toon identiteit"}>
+                    <img src="/images/icon-eye.svg" alt="Identiteit" />
                   </a>
+                )}
+              </div>
+
+              <div className="boxed_chat_top">
+                <div className="writing"></div>
+                <div className="looked"></div>
+              </div>
+
+              {/* Messages */}
+              <div className="message_box">
+                {messages.length === 0 && (
+                  <div className="empty-chat">
+                    <p style={{ color: '#999', textAlign: 'center', marginTop: 60 }}>
+                      Stuur een anoniem bericht naar {displayName}
+                    </p>
+                  </div>
+                )}
+                {[...messages].reverse().map((msg) => (
+                  <div key={msg.id} className="chat-msg">
+                    <strong>{msg.sender}</strong> : {msg.text} <span>{msg.time}</span>
+                  </div>
                 ))}
               </div>
-            )}
-            {/* Input box */}
-            <div className="input_box">
-              <input
-                type="text"
-                placeholder="Je bericht"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    sendMessage();
-                    e.preventDefault();
-                  }
-                }}
-              />
-              <a className="input-camera" style={{ cursor: 'pointer' }}>
-                <img src="/images/icon-camera.svg" alt="Foto" />
-              </a>
-              {user && !isOwnProfile && (
-                <a className="input-eye" onClick={() => setRevealIdentity(!revealIdentity)} style={{ cursor: 'pointer' }} title={revealIdentity ? "Verberg identiteit" : "Toon identiteit"}>
-                  <img src="/images/icon-eye.svg" alt="Identiteit" />
-                </a>
-              )}
-            </div>
 
-            <div className="boxed_chat_top">
-              <div className="writing"></div>
-              <div className="looked"></div>
-            </div>
-
-            {/* Messages */}
-            <div className="message_box">
-              {messages.length === 0 && (
-                <div className="empty-chat">
-                  <p style={{ color: '#999', textAlign: 'center', marginTop: 60 }}>
-                    Stuur een anoniem bericht naar {displayName}
-                  </p>
+              {/* ═══════ SHARE BAR ═══════ */}
+              <div className="share-bar">
+                <div className="share-bar-text">
+                  <p>Sluit deze pagina niet, je bent online. Mensen kunnen je berichten sturen.</p>
+                  <p>Deel je profiel met vrienden: <a href={`/${username}`} target="_blank">{typeof window !== 'undefined' ? `${window.location.origin}/${username}` : `veilo.com/${username}`}</a></p>
                 </div>
-              )}
-              {[...messages].reverse().map((msg) => (
-                <div key={msg.id} className="chat-msg">
-                  <strong>{msg.sender}</strong> : {msg.text} <span>{msg.time}</span>
+                <div className="share-bar-icons">
+                  <a className="share-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Facebook">f</a>
+                  <a className="share-x" href={`https://twitter.com/intent/tweet?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="X">𝕏</a>
+                  <a className="share-google" href={`https://plus.google.com/share?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Google">G</a>
                 </div>
-              ))}
-            </div>
-
-            {/* ═══════ SHARE BAR ═══════ */}
-            <div className="share-bar">
-              <div className="share-bar-text">
-                <p>Sluit deze pagina niet, je bent online. Mensen kunnen je berichten sturen.</p>
-                <p>Deel je profiel met vrienden: <a href={`/${username}`} target="_blank">{typeof window !== 'undefined' ? `${window.location.origin}/${username}` : `veilo.com/${username}`}</a></p>
-              </div>
-              <div className="share-bar-icons">
-                <a className="share-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Facebook">f</a>
-                <a className="share-x" href={`https://twitter.com/intent/tweet?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="X">𝕏</a>
-                <a className="share-google" href={`https://plus.google.com/share?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Google">G</a>
               </div>
             </div>
-          </div>
+          )}
 
           {/* ═══════ PROMOTE BAR ═══════ */}
           <div className="promote-bar">
@@ -863,6 +940,26 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Block Confirmation Dialog */}
+      {showBlockConfirm && (
+        <div className="block-confirm-overlay">
+          <div className="block-confirm-dialog">
+            <div className="block-confirm-content">
+              <h3>Blokkeer anonieme gebruiker</h3>
+              <p>Als je deze anonieme gebruiker blokkeert, kan deze gebruiker je niet meer schrijven. Weet je het zeker?</p>
+              <div className="block-confirm-buttons">
+                <button className="block-confirm-yes" onClick={() => confirmBlock(showBlockConfirm)}>
+                  Ja, blokkeer
+                </button>
+                <button className="block-confirm-no" onClick={cancelBlock}>
+                  Annuleer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
