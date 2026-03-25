@@ -81,9 +81,11 @@ export default function ProfilePage() {
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
   const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
+  const [showProfilePicChange, setShowProfilePicChange] = useState(false);
   
   // Track session start time for clean state
   const sessionStartTime = useRef<number>(Date.now());
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isOwnProfile = user && myProfile?.username === username;
@@ -472,6 +474,19 @@ export default function ProfilePage() {
     setShowBlockConfirm(null);
   }
 
+  function handleProfilePicChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file && isOwnProfile && profileData?.uid) {
+      // TODO: Upload to storage and update profile
+      console.log('Profile picture change:', file);
+      // For now, just log the file
+    }
+  }
+
+  function triggerProfilePicChange() {
+    fileInputRef.current?.click();
+  }
+
   function handleRefresh() {
     if (searchCity.trim()) {
       setFilterActive(true);
@@ -803,12 +818,30 @@ export default function ProfilePage() {
 
         {/* ═══════ LEFT SIDEBAR ═══════ */}
         <div className="prof-left">
-          <div className="profile_img">
+          <div 
+            className="profile_img"
+            onMouseEnter={() => isOwnProfile && setShowProfilePicChange(true)}
+            onMouseLeave={() => setShowProfilePicChange(false)}
+            onClick={isOwnProfile ? triggerProfilePicChange : undefined}
+            style={{ cursor: isOwnProfile ? 'pointer' : 'default' }}
+          >
             <img
               src={profileImg}
               alt={`${displayName} profielfoto`}
             />
+            {isOwnProfile && showProfilePicChange && (
+              <div className="profile_pic_change_overlay">
+                <span>Foto wijzigen</span>
+              </div>
+            )}
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleProfilePicChange}
+            style={{ display: 'none' }}
+          />
           <div className="left_follow_box">
             <div>
               <h4>Volgers</h4>
