@@ -243,9 +243,18 @@ export default function ProfilePage() {
       const allMsgs = snapshot.docs.map((d) => {
         const data = d.data();
         const ts = data.createdAt?.toDate?.() || new Date();
+        
+        // Use consistent anonymous names from senderUid
+        let senderName = data.sender || 'Anoniem';
+        if (data.senderUid && data.senderUid.startsWith('anon_')) {
+          // Extract consistent anonymous name from senderUid
+          const anonId = data.senderUid.replace('anon_', '');
+          senderName = `Anony-${anonId}`;
+        }
+        
         return {
           id: d.id,
-          sender: data.sender || 'Anoniem',
+          sender: senderName,
           senderUid: data.senderUid || null,
           text: data.text || '',
           time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
