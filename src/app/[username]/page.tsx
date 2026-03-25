@@ -98,17 +98,16 @@ export default function ProfilePage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isOwnProfile = user && myProfile?.username === username;
 
-  /* Dynamic Browser Tab Title */
+  /* Dynamic Browser Tab Title (Visitor Case) */
   useEffect(() => {
-    if (profileLoading) return;
+    if (profileLoading || !profileData) return;
     
-    // Fallback for displayName if profileData is still null
-    const currentDisplayName = profileData?.displayName || username;
+    const currentDisplayName = profileData.displayName || username;
 
-    if (isOwnProfile) {
-      document.title = 'Veilo';
-    } else {
+    if (!isOwnProfile) {
       document.title = `${currentDisplayName} | Veilo`;
+    } else {
+      document.title = 'Veilo';
     }
 
     // Restore default title on unmount
