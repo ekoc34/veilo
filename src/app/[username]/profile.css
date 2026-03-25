@@ -853,29 +853,16 @@
 .profile_pic_change_file {
   display: flex;
   align-items: center;
-  gap: 8px; /* Text right next to the camera icon */
   border: none !important;
   background: none !important;
   padding: 0;
 }
 
-.profile_pic_change_camera {
-  width: 20px;
-  height: 16px;
-  filter: brightness(0) invert(1);
-  border: none !important;
-  background: transparent !important;
+.profile_pic_change_camera_svg {
+  width: 22px;
+  height: 22px;
+  color: #FFFFFF; /* Pure white icon */
   display: block;
-}
-
-.profile_pic_change_file span {
-  white-space: nowrap;
-  color: #FFFFFF;
-  font-size: 14px;
-  font-weight: normal;
-  font-family: Arial, sans-serif;
-  border: none !important;
-  background: transparent !important;
 }
 
 /* --- Message styling to match örnek images --- */
