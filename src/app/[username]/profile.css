@@ -840,37 +840,32 @@
   left: 0;
   right: 0;
   height: 40px;
-  background: transparent; /* Transparent background */
+  background: #000000; /* Brought back solid black */
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0; /* Align far left */
+  padding: 0 10px; /* Spacing from the very beginning of the line */
   cursor: pointer;
   z-index: 10;
   border: none;
-  outline: none;
 }
 
 .profile_pic_change_file {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px; /* Text right next to the camera icon */
   border: none !important;
   background: none !important;
   padding: 0;
-  box-shadow: none !important;
 }
 
 .profile_pic_change_camera {
   width: 20px;
   height: 16px;
-  filter: brightness(0) invert(1); /* Pure white icon */
+  filter: brightness(0) invert(1);
   border: none !important;
   background: transparent !important;
   display: block;
-  box-shadow: none !important;
-  padding: 0;
-  margin: 0;
 }
 
 .profile_pic_change_file span {
@@ -881,8 +876,6 @@
   font-family: Arial, sans-serif;
   border: none !important;
   background: transparent !important;
-  padding: 0;
-  margin: 0;
 }
 
 /* --- Message styling to match örnek images --- */
