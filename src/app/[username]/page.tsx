@@ -19,6 +19,9 @@ interface OnlineUser {
   username: string;
   img: string;
   alt: string;
+  displayName: string;
+  bio: string;
+  city: string;
 }
 
 interface ProfileData {
@@ -127,14 +130,62 @@ export default function ProfilePage() {
     }
   }, [showSettings, profileData, myProfile]);
 
-  /* Online users (will be populated from Firestore later) */
-  const [onlineUsers] = useState<OnlineUser[]>(
-    Array.from({ length: 16 }, (_, i) => ({
-      username: `gebruiker${i + 1}`,
-      img: '/images/default-avatar.svg',
-      alt: `Gebruiker ${i + 1}`,
-    }))
-  );
+  /* Online users state */
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]); // For searching
+  const [filteredOnlineUsers, setFilteredOnlineUsers] = useState<OnlineUser[]>([]);
+
+  /* Fetch all users for search and online status */
+  useEffect(() => {
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snap) => {
+      const usersData = snap.docs.map(doc => ({
+        uid: doc.id,
+        ...(doc.data() as any)
+      }));
+      setAllUsers(usersData);
+
+      // Filter for online users (e.g., active in last 5 minutes)
+      const now = Date.now();
+      const online = usersData
+        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000)
+        .map(u => ({
+          username: u.username || '',
+          img: u.profileImg || '/images/default-avatar.svg',
+          alt: u.displayName || u.username || '',
+          displayName: u.displayName || u.username || '',
+          bio: u.bio || '',
+          city: u.city || ''
+        }));
+      setOnlineUsers(online);
+      setFilteredOnlineUsers(online);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  /* Real-time Search Logic */
+  useEffect(() => {
+    if (!searchCity.trim()) {
+      setFilteredOnlineUsers(onlineUsers);
+      return;
+    }
+
+    const query = searchCity.toLowerCase();
+    // Search through ALL users, not just online ones
+    const filtered = allUsers.filter(u => 
+      (u.displayName || '').toLowerCase().includes(query) ||
+      (u.bio || '').toLowerCase().includes(query) ||
+      (u.city || '').toLowerCase().includes(query)
+    ).map(u => ({
+      username: u.username || '',
+      img: u.profileImg || '/images/default-avatar.svg',
+      alt: u.displayName || u.username || '',
+      displayName: u.displayName || u.username || '',
+      bio: u.bio || '',
+      city: u.city || ''
+    }));
+    setFilteredOnlineUsers(filtered);
+  }, [searchCity, onlineUsers, allUsers]);
 
   /* Load profile: fetch from Firestore to ensure latest data, especially for profile picture */
   useEffect(() => {
@@ -557,6 +608,14 @@ export default function ProfilePage() {
   async function handleSettingsUpdate() {
     if (!user) return;
     try {
+      // Immediate local update to avoid delay
+      setProfileData(prev => prev ? { 
+        ...prev, 
+        displayName: settingsName,
+        bio: settingsBio,
+        city: settingsCity 
+      } : prev);
+
       await updateDoc(doc(db, 'users', user.uid), {
         displayName: settingsName, // Use displayName to match what other users see
         name: settingsName, // Keep name for backward compatibility if needed
@@ -604,6 +663,7 @@ export default function ProfilePage() {
   const bio = profileData?.bio || '';
   const followers = profileData?.followers || 0;
   const profileImg = profileData?.profileImg || '/images/default-avatar.svg';
+  const city = (profileData as any)?.city || '';
 
   const veils = [
     profileData?.veil1 || 0,
@@ -611,6 +671,15 @@ export default function ProfilePage() {
     profileData?.veil3 || 0,
     profileData?.veil4 || 0,
   ];
+
+  /* Online list items */
+  const onlineListItems = filteredOnlineUsers.map((u, i) => (
+    <li key={u.username || i}>
+      <Link href={`/${u.username}`}>
+        <img src={u.img} alt={u.alt} />
+      </Link>
+    </li>
+  ));
 
   return (
     <div className="profile-body">
@@ -765,6 +834,11 @@ export default function ProfilePage() {
               <a className={settingsTab === 'privacy' ? 'active' : ''} onClick={() => setSettingsTab('privacy')}>Privacy</a>
               <a className={settingsTab === 'password' ? 'active' : ''} onClick={() => setSettingsTab('password')}>Wachtwoord</a>
             </div>
+            {settingsUpdated && (
+              <div className="settings-success-inner">
+                Ayarların Başarıyla Güncellendi.
+              </div>
+            )}
             <div className="modal-settings-body">
               {settingsTab === 'general' && (
                 <div className="settings-form">
@@ -910,7 +984,7 @@ export default function ProfilePage() {
         <div className="about_box">
           <h2>{displayName}</h2>
           <span></span>
-          {bio && <p>{bio}</p>}
+          {(bio || city) && <p>{bio}{bio && city ? ' - ' : ''}{city}</p>}
         </div>
 
         {/* ═══════ LEFT SIDEBAR ═══════ */}
@@ -1206,13 +1280,7 @@ export default function ProfilePage() {
             </div>
             <div className="online_list">
               <ul>
-                {onlineUsers.map((u) => (
-                  <li key={u.username}>
-                    <Link href={`/${u.username}`} target="_blank">
-                      <img src={u.img} alt={`${u.alt} profielfoto`} />
-                    </Link>
-                  </li>
-                ))}
+                {onlineListItems}
               </ul>
             </div>
           </div>

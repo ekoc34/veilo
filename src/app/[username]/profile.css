@@ -1516,32 +1516,19 @@
   color: #333;
 }
 
-/* --- Settings Success Notification --- */
-.settings-success-scroll {
-  position: fixed;
-  top: -60px; /* Hidden by default */
-  left: 0;
-  right: 0;
-  height: 50px;
+/* --- Settings Success Notification (Inner Modal) --- */
+.settings-success-inner {
   background: #FFF9C4;
   color: #333;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 12px 20px;
   font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  z-index: 1000000;
-  transition: top 0.5s ease-in-out;
   border-bottom: 1px solid #FFE082;
+  font-weight: 500;
+  text-align: left;
 }
 
-.settings-success-scroll.visible {
-  top: 0;
-}
-
-.settings-success-msg {
-  display: none; /* Removed the old static success message */
+.settings-success-scroll {
+  display: none; /* Hide the scrolling one if we use the inner one from ayar1.png */
 }
 
 .modal-settings-body {
