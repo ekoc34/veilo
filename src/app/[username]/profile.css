@@ -839,35 +839,43 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 40px; /* Adjusted to match the ratio in the photo */
-  background: #000000; /* Solid black */
+  height: 40px;
+  background: #000000;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0 15px; /* Spacing from left edge */
+  padding: 0 10px; /* Aligned closer to the left edge */
   cursor: pointer;
   z-index: 10;
+  border: none;
 }
 
 .profile_pic_change_file {
   display: flex;
   align-items: center;
-  gap: 10px; /* Gap between icon and text */
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 0;
 }
 
 .profile_pic_change_camera {
-  width: 22px; /* Adjusted size to match the photo */
-  height: 18px;
-  filter: brightness(0) invert(1); /* Keep the icon pure white */
-  opacity: 1;
+  width: 20px;
+  height: 16px;
+  filter: brightness(0) invert(1); /* Pure white icon */
+  border: none;
+  background: none;
+  display: block;
 }
 
 .profile_pic_change_file span {
   white-space: nowrap;
-  color: #28A0C8; /* Vibrant theme blue */
-  font-size: 14px; /* Matches the text size in the photo */
-  font-weight: 500;
+  color: #FFFFFF; /* Changed text color to white as per request */
+  font-size: 14px;
+  font-weight: normal;
   font-family: Arial, sans-serif;
+  border: none;
+  background: none;
 }
 
 /* --- Message styling to match örnek images --- */
