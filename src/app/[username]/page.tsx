@@ -996,13 +996,7 @@ export default function ProfilePage() {
 
               {/* Messages for active conversation */}
               <div className="message_box">
-                {!activeConversation ? (
-                  <div className="empty-chat">
-                    <p style={{ color: '#999', textAlign: 'center', marginTop: 60 }}>
-                      Wacht op berichten...
-                    </p>
-                  </div>
-                ) : (
+                {activeConversation && (
                   (() => {
                     // Show: 1) Messages FROM the anonymous user, 2) Messages TO the anonymous user (owner's replies)
                     const activeMsgs = messages.filter(m => 
@@ -1089,13 +1083,6 @@ export default function ProfilePage() {
 
               {/* Messages */}
               <div className="message_box">
-                {messages.length === 0 && (
-                  <div className="empty-chat">
-                    <p style={{ color: '#999', textAlign: 'center', marginTop: 60 }}>
-                      Stuur een anoniem bericht naar {displayName}
-                    </p>
-                  </div>
-                )}
                 {[...messages].reverse().map((msg) => (
                   <div key={msg.id} className="chat-msg">
                     <strong>{msg.sender}</strong> : {msg.text} <span>{msg.time}</span>
