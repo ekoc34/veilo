@@ -104,10 +104,9 @@ export default function ProfilePage() {
     
     const currentDisplayName = profileData.displayName || username;
 
+    // Only update title for visitors. For owner, layout metadata already sets "Veilo"
     if (!isOwnProfile) {
       document.title = `${currentDisplayName} | Veilo`;
-    } else {
-      document.title = 'Veilo';
     }
 
     // Restore default title on unmount

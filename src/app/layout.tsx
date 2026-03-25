@@ -1,6 +1,21 @@
 import type { Metadata } from 'next';
+import { Roboto, Roboto_Condensed } from 'next/font/google';
 import Providers from './Providers';
 import './globals.css';
+
+const roboto = Roboto({
+  weight: ['300', '400', '500', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-roboto',
+});
+
+const robotoCondensed = Roboto_Condensed({
+  weight: ['300', '400', '500', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-roboto-condensed',
+});
 
 export const metadata: Metadata = {
   title: 'Veilo | Anoniem Chat',
@@ -31,12 +46,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="nl">
+    <html lang="nl" className={`${roboto.variable} ${robotoCondensed.variable}`}>
       <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap"
-          rel="stylesheet"
-        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

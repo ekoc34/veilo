@@ -1,6 +1,14 @@
 import { Metadata } from 'next';
 
-export const generateMetadata = async ({ params }: { params: { username: string } }): Promise<Metadata> => {
+type Props = {
+  params: Promise<{ username: string }>;
+  children: React.ReactNode;
+};
+
+export const generateMetadata = async ({ params }: Props): Promise<Metadata> => {
+  // Await params for Next.js 15+
+  await params;
+  
   return {
     title: 'Veilo',
   };
@@ -8,8 +16,6 @@ export const generateMetadata = async ({ params }: { params: { username: string 
 
 export default function ProfileLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: Props) {
   return <>{children}</>;
 }
