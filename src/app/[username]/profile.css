@@ -853,6 +853,7 @@
 .profile_pic_change_file {
   display: flex;
   align-items: center;
+  gap: 8px; /* Text right next to the icon */
   border: none !important;
   background: none !important;
   padding: 0;
@@ -863,6 +864,16 @@
   height: 22px;
   color: #FFFFFF; /* Pure white icon */
   display: block;
+}
+
+.profile_pic_change_file span {
+  white-space: nowrap;
+  color: #FFFFFF; /* White text */
+  font-size: 14px;
+  font-weight: normal;
+  font-family: Arial, sans-serif;
+  border: none !important;
+  background: transparent !important;
 }
 
 /* --- Message styling to match örnek images --- */
