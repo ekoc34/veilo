@@ -625,7 +625,25 @@ export default function HomePage() {
                 />
                 <button
                   className="modal-submit"
-                  onClick={() => { if (contactName.trim() && contactEmail.trim() && contactMessage.trim()) setContactSent(true); }}
+                  onClick={async () => { 
+                    if (contactName.trim() && contactEmail.trim() && contactMessage.trim()) {
+                      try {
+                        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+                        await addDoc(collection(db, 'contact_messages'), {
+                          name: contactName.trim(),
+                          username: contactUsername.trim(),
+                          email: contactEmail.trim(),
+                          message: contactMessage.trim(),
+                          createdAt: serverTimestamp(),
+                          status: 'new'
+                        });
+                        setContactSent(true);
+                      } catch (error) {
+                        console.error('Error sending contact:', error);
+                        alert('Er is een fout opgetreden. Probeer het opnieuw.');
+                      }
+                    }
+                  }}
                 >
                   Verstuur
                 </button>

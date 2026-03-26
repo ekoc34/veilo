@@ -2,11 +2,14 @@
 
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 export default function WachtwoordVergetenPage() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -17,8 +20,16 @@ export default function WachtwoordVergetenPage() {
       return;
     }
 
-    // TODO: Implement actual password reset
-    setSent(true);
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setSent(true);
+    } catch (err: any) {
+      // Always show success message for security (don't reveal if email exists)
+      setSent(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -119,19 +130,20 @@ export default function WachtwoordVergetenPage() {
 
             <button
               type="submit"
+              disabled={loading}
               style={{
                 width: '100%',
                 height: 44,
-                background: '#7C4DFF',
+                background: loading ? '#9e85ff' : '#7C4DFF',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 5,
                 fontSize: 16,
-                cursor: 'pointer',
+                cursor: loading ? 'not-allowed' : 'pointer',
                 fontWeight: 600,
               }}
             >
-              Verstuur
+              {loading ? 'Bezig...' : 'Verstuur'}
             </button>
 
             <div style={{ textAlign: 'center', marginTop: 15 }}>
