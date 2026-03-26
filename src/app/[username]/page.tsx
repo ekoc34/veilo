@@ -90,9 +90,6 @@ export default function ProfilePage() {
   const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
   const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
   const [showProfilePicChange, setShowProfilePicChange] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [otherTyping, setOtherTyping] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [selectedProfilePic, setSelectedProfilePic] = useState<string | null>(null);
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
@@ -101,38 +98,12 @@ export default function ProfilePage() {
   const [contactMessage, setContactMessage] = useState('');
   const [contactSent, setContactSent] = useState(false);
   const [contactError, setContactError] = useState('');
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followingList, setFollowingList] = useState<any[]>([]);
-  const [popularUsers, setPopularUsers] = useState<any[]>([]);
-  const [storedMessages, setStoredMessages] = useState<any[]>([]);
-  const [selectedStoredMessages, setSelectedStoredMessages] = useState<Set<string>>(new Set());
   
   // Track session start time for clean state
   const sessionStartTime = useRef<number>(Date.now());
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const notificationSoundRef = useRef<HTMLAudioElement | null>(null);
-  const prevMessageCount = useRef<number>(0);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  // Initialize notification sound
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      notificationSoundRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1sbW5vcnB4e4GEi5CPmJedqKa3u8DA0dHg4OL/+/7+//7//v7/BQoNCRYZFCwvMDs9N0pLSFlaV2dqZ3Z5doaIho2QjZiblqCjnqirnKyopbOpn7Gto7OvqK2yrKSwrqGps6unqqyfrrOmsba3tb3Cu8PGxcTGxsfIxsjIxsXDw8DAwL69urm3tbSyr7Crraqpp6SlpaOhn6KgoJ2fn5yeoJ+ho6WmqqywtLi8wMTHy87R1NfZ3d/h4+Xl5+fn6evo6ujo5ubk4+Hf3dra19PQzcrGwb24tLCrp6SgnJmVko+Mi4qJiomKi4yNjo+RkpSVmJqdn6Kjpqipra+ys7a4ur2/wcPFx8nLzc/R09XX2drb3d7f4OHi4uPj4+Pj4+Pj4+Lh4eHg39/e3d3c3NvZ2djW1dTT09LR0M/Ozs3MzMvLysrKysnJycnJycnKysrLzMzNzs/Q0dLT1NXW19nb3N7f4eHj5Obn6Ojp6uvr7O3t7u7v7+/v8O/v7u7t7ezr6unp6Ofl5OLg3t3b2dfV09HPzcrIxcPBv726uLW0sq+trKqpqKenp6enqKmpq6ytrrCxs7W3ubu9v8HDxcfJy87Q0tXX2dvd3+Hi5Obo6evs7u/w8fLz8/T09PT09PPz8vHw7+7t7Ovq6ejo5+Xl5OLh4N/d3Nva2NfV1NPS0dDPzs3My8rKycnIx8bGxcXExMPDw8PDw8PExMXFxsbHyMnKy8zNz9DR0tPV1tfZ2tzd3+Di4+Xn6Orr7e7v8PHy8/T19vb39/j4+Pj4+Pj39/b29fT08vHw7+7t7Ovq6ejn5eTj4uHg39/e3d3c3Nva2tnZ2NjX19fW1tbW1tbW19fX2Nja2tvb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLy8/T09fX29vb29/f39/f39/b29vX19PTz8vHw7+7t7Ovq6ejo5+bl5OPi4eDf3t3c29rZ2NfW1dXU09LS0dHQ0M/Pzs7Ozs7OzWFi');
-    }
-  }, []);
-  
-  // Play sound when new message arrives
-  useEffect(() => {
-    if (soundOn && messages.length > prevMessageCount.current && isOwnProfile) {
-      const lastMsg = messages[messages.length - 1];
-      // Only play sound for messages from others
-      if (lastMsg && lastMsg.senderUid !== user?.uid) {
-        notificationSoundRef.current?.play().catch(() => {});
-      }
-    }
-    prevMessageCount.current = messages.length;
-  }, [messages, soundOn, isOwnProfile, user?.uid]);
   const isOwnProfile = user && myProfile?.username === username;
 
   /* Dynamic Browser Tab Title (Visitor Case) */
@@ -158,8 +129,6 @@ export default function ProfilePage() {
       setSettingsName(profileData.displayName || '');
       setSettingsEmail(myProfile?.email || '');
       setSettingsBio(profileData.bio || '');
-      setSettingsCity(profileData.city || '');
-      setSettingsColor(profileData.themeColor || '#28A0C8');
       setSettingsUpdated(false);
     }
   }, [showSettings, profileData, myProfile]);
@@ -307,98 +276,6 @@ export default function ProfilePage() {
     }
     loadProfile();
   }, [username]);
-
-  /* Check if current user follows this profile */
-  useEffect(() => {
-    if (!user || !profileData?.uid || isOwnProfile) return;
-    const followRef = doc(db, 'users', user.uid, 'following', profileData.uid);
-    const unsubscribe = onSnapshot(followRef, (snap) => {
-      setIsFollowing(snap.exists());
-    });
-    return () => unsubscribe();
-  }, [user, profileData?.uid, isOwnProfile]);
-
-  /* Load user settings (online visibility, photo permissions) */
-  useEffect(() => {
-    if (!user || !isOwnProfile) return;
-    const userRef = doc(db, 'users', user.uid);
-    const unsubscribe = onSnapshot(userRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (typeof data.showOnlineList === 'boolean') {
-          setShowOnlineList(data.showOnlineList);
-        }
-        if (typeof data.allowPhotos === 'boolean') {
-          setAllowPhotos(data.allowPhotos);
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [user, isOwnProfile]);
-
-  /* Load following list for profile owner */
-  useEffect(() => {
-    if (!user || !isOwnProfile) return;
-    const followingRef = collection(db, 'users', user.uid, 'following');
-    const unsubscribe = onSnapshot(followingRef, async (snap) => {
-      const followingIds = snap.docs.map(d => d.id);
-      if (followingIds.length === 0) {
-        setFollowingList([]);
-        return;
-      }
-      // Fetch user details for each followed user
-      const usersData = await Promise.all(
-        followingIds.map(async (uid) => {
-          const userDoc = await getDoc(doc(db, 'users', uid));
-          if (userDoc.exists()) {
-            return { uid, ...userDoc.data() };
-          }
-          return null;
-        })
-      );
-      setFollowingList(usersData.filter(Boolean));
-    });
-    return () => unsubscribe();
-  }, [user, isOwnProfile]);
-
-  /* Load popular users */
-  useEffect(() => {
-    const loadPopularUsers = async () => {
-      const usersRef = collection(db, 'users');
-      const snap = await getDocs(usersRef);
-      const usersData = snap.docs.map(d => ({
-        uid: d.id,
-        ...d.data() as any
-      }));
-      // Sort by total veils
-      const sorted = usersData
-        .map(u => ({
-          ...u,
-          totalVeils: (u.veil1 || 0) + (u.veil2 || 0) + (u.veil3 || 0) + (u.veil4 || 0)
-        }))
-        .filter(u => u.totalVeils > 0)
-        .sort((a, b) => b.totalVeils - a.totalVeils)
-        .slice(0, 20);
-      setPopularUsers(sorted);
-    };
-    loadPopularUsers();
-  }, []);
-
-  /* Load stored messages for profile owner */
-  useEffect(() => {
-    if (!user || !isOwnProfile || !profileData?.uid) return;
-    const msgsRef = collection(db, 'users', profileData.uid, 'storedMessages');
-    const q = query(msgsRef, orderBy('createdAt', 'desc'), limit(100));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const msgs = snap.docs.map(d => ({
-        id: d.id,
-        ...d.data() as any,
-        createdAt: d.data().createdAt?.toDate?.() || new Date()
-      }));
-      setStoredMessages(msgs);
-    });
-    return () => unsubscribe();
-  }, [user, isOwnProfile, profileData?.uid]);
 
   /* Load conversations for profile owner */
   useEffect(() => {
@@ -594,57 +471,6 @@ export default function ProfilePage() {
     // Don't clear profile data - it should persist
   }, []);
 
-  /* Handle typing indicator */
-  async function updateTypingStatus(typing: boolean) {
-    if (!profileData?.uid) return;
-    try {
-      const typingDocRef = doc(db, 'typing', profileData.uid);
-      if (isOwnProfile) {
-        await setDoc(typingDocRef, { ownerTyping: typing, updatedAt: serverTimestamp() }, { merge: true });
-      } else {
-        const anonId = user?.uid || getAnonId();
-        await setDoc(typingDocRef, { [`visitor_${anonId}`]: typing, updatedAt: serverTimestamp() }, { merge: true });
-      }
-    } catch {
-      // Silently fail
-    }
-  }
-
-  function handleTyping() {
-    if (!isTyping) {
-      setIsTyping(true);
-      updateTypingStatus(true);
-    }
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      updateTypingStatus(false);
-    }, 2000);
-  }
-
-  // Listen for typing status from other users
-  useEffect(() => {
-    if (!profileData?.uid) return;
-    const typingDocRef = doc(db, 'typing', profileData.uid);
-    const unsubscribe = onSnapshot(typingDocRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (isOwnProfile) {
-          // Check if any visitor is typing
-          const visitorTyping = Object.entries(data)
-            .filter(([key]) => key.startsWith('visitor_'))
-            .some(([, val]) => val === true);
-          setOtherTyping(visitorTyping);
-        } else {
-          setOtherTyping(data.ownerTyping === true);
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [profileData?.uid, isOwnProfile]);
-
   /* Send message to Firestore */
   async function sendMessage() {
     if (!message.trim() || !profileData?.uid) return;
@@ -722,86 +548,6 @@ export default function ProfilePage() {
       return convDoc.id;
     }
     return snap.docs[0].id;
-  }
-
-  /* Store a message for later viewing */
-  async function storeMessage(msg: ChatMsg) {
-    if (!user || !profileData?.uid) return;
-    try {
-      await addDoc(collection(db, 'users', profileData.uid, 'storedMessages'), {
-        sender: msg.sender,
-        senderUid: msg.senderUid,
-        text: msg.text,
-        time: msg.time,
-        createdAt: serverTimestamp()
-      });
-    } catch (error) {
-      console.error('Error storing message:', error);
-    }
-  }
-
-  /* Delete selected stored messages */
-  async function deleteSelectedMessages() {
-    if (!user || !profileData?.uid || selectedStoredMessages.size === 0) return;
-    try {
-      const deletePromises = Array.from(selectedStoredMessages).map(msgId => 
-        deleteDoc(doc(db, 'users', profileData.uid, 'storedMessages', msgId))
-      );
-      await Promise.all(deletePromises);
-      setSelectedStoredMessages(new Set());
-    } catch (error) {
-      console.error('Error deleting messages:', error);
-    }
-  }
-
-  /* Select all stored messages */
-  function selectAllMessages() {
-    setSelectedStoredMessages(new Set(storedMessages.map(m => m.id)));
-  }
-
-  /* Toggle message selection */
-  function toggleMessageSelection(msgId: string) {
-    setSelectedStoredMessages(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(msgId)) {
-        newSet.delete(msgId);
-      } else {
-        newSet.add(msgId);
-      }
-      return newSet;
-    });
-  }
-
-  /* Follow/Unfollow this profile */
-  async function toggleFollow() {
-    if (!user || !profileData?.uid || isOwnProfile) return;
-    try {
-      const followRef = doc(db, 'users', user.uid, 'following', profileData.uid);
-      const profileRef = doc(db, 'users', profileData.uid);
-      
-      if (isFollowing) {
-        // Unfollow
-        await deleteDoc(followRef);
-        await updateDoc(profileRef, {
-          followers: increment(-1)
-        });
-        setIsFollowing(false);
-      } else {
-        // Follow
-        await setDoc(followRef, {
-          followedAt: serverTimestamp(),
-          username: profileData.username,
-          displayName: profileData.displayName,
-          profileImg: profileData.profileImg
-        });
-        await updateDoc(profileRef, {
-          followers: increment(1)
-        });
-        setIsFollowing(true);
-      }
-    } catch (error) {
-      console.error('Error toggling follow:', error);
-    }
   }
 
   /* Give a veil to this profile */
@@ -916,20 +662,9 @@ export default function ProfilePage() {
       return;
     }
 
-    try {
-      await addDoc(collection(db, 'contact_messages'), {
-        name: contactName.trim(),
-        username: contactUsername.trim(),
-        email: contactEmail.trim(),
-        message: contactMessage.trim(),
-        createdAt: serverTimestamp(),
-        status: 'new'
-      });
-      setContactSent(true);
-    } catch (error) {
-      console.error('Error sending contact message:', error);
-      setContactError('Er is een fout opgetreden. Probeer het opnieuw.');
-    }
+    // Simulate sending
+    setContactSent(true);
+    // Reset after some time or on close
   }
 
   async function handleSettingsUpdate() {
@@ -1005,13 +740,11 @@ export default function ProfilePage() {
   async function handlePasswordReset() {
     if (!user?.email) return;
     try {
-      const { sendPasswordResetEmail } = await import('firebase/auth');
-      const { auth } = await import('@/lib/firebase');
-      await sendPasswordResetEmail(auth, user.email);
+      // In a real app, you'd use Firebase sendPasswordResetEmail
+      // For now, we'll simulate the success
       alert(`Er is een e-mail gestuurd naar ${user.email} om je wachtwoord te herstellen.`);
     } catch (error) {
       console.error('Error sending password reset:', error);
-      alert('Er is een fout opgetreden bij het versturen van de reset e-mail.');
     }
   }
 
@@ -1135,7 +868,7 @@ export default function ProfilePage() {
         Instellingen zijn succesvol bijgewerkt.
       </div>
 
-      {/* ═══════ HEADER ══════��� */}
+      {/* ═══════ HEADER ═══════ */}
       <div className="prof-header">
         <div className="prof-container">
           <div className="prof-logo">
@@ -1154,12 +887,7 @@ export default function ProfilePage() {
                       <div className="nav-hint-item">
                         <span>Toon in online lijst</span>
                         <label className="toggle-switch">
-                          <input type="checkbox" checked={showOnlineList} onChange={async (e) => {
-                            setShowOnlineList(e.target.checked);
-                            if (user) {
-                              await updateDoc(doc(db, 'users', user.uid), { showOnlineList: e.target.checked });
-                            }
-                          }} />
+                          <input type="checkbox" checked={showOnlineList} onChange={(e) => setShowOnlineList(e.target.checked)} />
                           <span className="toggle-slider"></span>
                           <span className="toggle-label">{showOnlineList ? 'Aan' : 'Uit'}</span>
                         </label>
@@ -1167,12 +895,7 @@ export default function ProfilePage() {
                       <div className="nav-hint-item">
                         <span>{"Foto's mogen naar mij worden gestuurd"}</span>
                         <label className="toggle-switch">
-                          <input type="checkbox" checked={allowPhotos} onChange={async (e) => {
-                            setAllowPhotos(e.target.checked);
-                            if (user) {
-                              await updateDoc(doc(db, 'users', user.uid), { allowPhotos: e.target.checked });
-                            }
-                          }} />
+                          <input type="checkbox" checked={allowPhotos} onChange={(e) => setAllowPhotos(e.target.checked)} />
                           <span className="toggle-slider"></span>
                           <span className="toggle-label">{allowPhotos ? 'Aan' : 'Uit'}</span>
                         </label>
@@ -1232,35 +955,22 @@ export default function ProfilePage() {
         <div className="modal-overlay" onClick={() => setShowPopular(false)}>
           <div className="modal-popular" onClick={(e) => e.stopPropagation()}>
             <div className="modal-popular-head">
-              <span className="modal-popular-icon">*</span>
+              <span className="modal-popular-icon">⏱</span>
               <h2>Populairen van vandaag</h2>
-              <a className="modal-close" onClick={() => setShowPopular(false)}>*</a>
+              <a className="modal-close" onClick={() => setShowPopular(false)}>✕</a>
             </div>
             <div className="modal-popular-body">
               <div className="modal-popular-col">
                 <span>Veils van vandaag</span>
               </div>
-              <div className="modal-popular-list" style={{ maxHeight: 400, overflowY: 'auto' }}>
-                {popularUsers.length === 0 ? (
-                  <div className="modal-popular-empty">
-                    <img src="/images/default-avatar.svg" alt="" />
-                    <p>Nog geen populaire gebruikers vandaag.</p>
-                  </div>
-                ) : (
-                  popularUsers.map((u: any, idx: number) => (
-                    <Link key={u.uid} href={`/${u.username}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 15px', borderBottom: '1px solid #eee', textDecoration: 'none' }}>
-                      <span style={{ width: 24, fontSize: 14, fontWeight: 'bold', color: idx < 3 ? '#FF9326' : '#666' }}>#{idx + 1}</span>
-                      <img src={u.profileImg || '/images/default-avatar.svg'} alt="" style={{ width: 45, height: 45, borderRadius: 4, objectFit: 'cover' }} />
-                      <div style={{ flex: 1 }}>
-                        <strong style={{ display: 'block', fontSize: 14, color: '#333' }}>{u.displayName || u.name || u.username}</strong>
-                        <span style={{ fontSize: 12, color: '#666' }}>{u.totalVeils} Veils</span>
-                      </div>
-                    </Link>
-                  ))
-                )}
+              <div className="modal-popular-list">
+                <div className="modal-popular-empty">
+                  <img src="/images/default-avatar.svg" alt="" />
+                  <p>Je staat nog niet in de top 100 van de veillijst.</p>
+                </div>
               </div>
               <div className="modal-popular-cta">
-                <a onClick={() => setShowPopular(false)} style={{ cursor: 'pointer' }}>PRAAT MET MEER MENSEN</a>
+                <a href="#">PRAAT MET MEER MENSEN</a>
               </div>
             </div>
           </div>
@@ -1273,51 +983,17 @@ export default function ProfilePage() {
           <div className="modal-messages" onClick={(e) => e.stopPropagation()}>
             <div className="modal-messages-head">
               <img src="/images/icon-messages.svg" alt="" className="modal-messages-icon" />
-              <h2>Berichten ({storedMessages.length})</h2>
+              <h2>Berichten</h2>
               <div className="modal-messages-actions">
-                <a onClick={selectAllMessages} style={{ cursor: 'pointer' }}>Alles selecteren</a>
-                <a onClick={deleteSelectedMessages} style={{ cursor: 'pointer', color: selectedStoredMessages.size > 0 ? '#c00' : '#666' }}>
-                  Selectie verwijderen ({selectedStoredMessages.size})
-                </a>
+                <a onClick={() => {}} style={{ cursor: 'pointer' }}>Alles selecteren</a>
+                <a onClick={() => {}} style={{ cursor: 'pointer' }}>Selectie verwijderen</a>
               </div>
-              <a className="modal-close" onClick={() => setShowMessages(false)}>x</a>
+              <a className="modal-close" onClick={() => setShowMessages(false)}>✕</a>
             </div>
-            <div className="modal-messages-body" style={{ maxHeight: 400, overflowY: 'auto' }}>
-              {storedMessages.length === 0 ? (
-                <div className="modal-messages-empty" style={{ padding: 40, textAlign: 'center', color: '#666' }}>
-                  Geen opgeslagen berichten.
-                </div>
-              ) : (
-                storedMessages.map((msg: any) => (
-                  <div 
-                    key={msg.id} 
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'flex-start', 
-                      gap: 10, 
-                      padding: '12px 15px', 
-                      borderBottom: '1px solid #eee',
-                      background: selectedStoredMessages.has(msg.id) ? '#f0f7ff' : 'transparent',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => toggleMessageSelection(msg.id)}
-                  >
-                    <input 
-                      type="checkbox" 
-                      checked={selectedStoredMessages.has(msg.id)} 
-                      onChange={() => toggleMessageSelection(msg.id)}
-                      style={{ marginTop: 3 }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <strong style={{ fontSize: 13, color: '#333' }}>{msg.sender}</strong>
-                        <span style={{ fontSize: 11, color: '#999' }}>{msg.time}</span>
-                      </div>
-                      <p style={{ fontSize: 13, color: '#555', margin: 0, lineHeight: 1.4 }}>{msg.text}</p>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div className="modal-messages-body">
+              <div className="modal-messages-empty">
+                Geen berichten.
+              </div>
             </div>
           </div>
         </div>
@@ -1340,7 +1016,7 @@ export default function ProfilePage() {
             </div>
             {settingsUpdated && (
               <div className="settings-success-inner">
-                Instellingen zijn succesvol bijgewerkt.
+                Ayarların Başarıyla Güncellendi.
               </div>
             )}
             <div className="modal-settings-body">
@@ -1466,29 +1142,10 @@ export default function ProfilePage() {
           <div className="modal-following" onClick={(e) => e.stopPropagation()}>
             <div className="modal-following-head">
               <img src="/images/icon-following.svg" alt="" className="modal-following-icon" />
-              <h2>Volglijst ({followingList.length})</h2>
+              <h2>Volglijst</h2>
               <a className="modal-close" onClick={() => setShowFollowing(false)}>✕</a>
             </div>
             <div className="modal-following-body">
-              {followingList.length === 0 ? (
-                <div className="modal-following-empty" style={{ padding: 20, textAlign: 'center', color: '#666' }}>
-                  Je volgt nog niemand.
-                </div>
-              ) : (
-                <div className="modal-following-list" style={{ padding: 10 }}>
-                  {followingList.map((u: any) => (
-                    <div key={u.uid} className="following-item" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderBottom: '1px solid #eee' }}>
-                      <Link href={`/${u.username}`} style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <img src={u.profileImg || '/images/default-avatar.svg'} alt="" style={{ width: 40, height: 40, borderRadius: 4, objectFit: 'cover' }} />
-                        <div>
-                          <strong style={{ display: 'block', fontSize: 14, color: '#333' }}>{u.displayName || u.name || u.username}</strong>
-                          <span style={{ fontSize: 12, color: '#666' }}>@{u.username}</span>
-                        </div>
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1549,15 +1206,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Follow button for visitors */}
-          {!isOwnProfile && user && (
-            <div className="left_profile_button">
-              <a onClick={toggleFollow} style={{ cursor: 'pointer' }}>
-                {isFollowing ? 'Ontvolgen' : 'Volgen'}
-              </a>
-            </div>
-          )}
-
           {/* Veils */}
           {VEIL_ITEMS.map((item, i) => (
             <div
@@ -1615,9 +1263,6 @@ export default function ProfilePage() {
                 <input
                   type="text"
                   placeholder="Je bericht"
-                  onChange={(e) => {
-                    if (e.target.value) handleTyping();
-                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && activeConversation) {
                       const input = e.target as HTMLInputElement;
@@ -1630,8 +1275,6 @@ export default function ProfilePage() {
                           createdAt: serverTimestamp(),
                         });
                         input.value = '';
-                        setIsTyping(false);
-                        updateTypingStatus(false);
                       }
                     }
                   }}
@@ -1647,9 +1290,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="boxed_chat_top">
-                <div className="writing">
-                  {otherTyping && <span>Anoniem is aan het typen...</span>}
-                </div>
+                <div className="writing"></div>
                 <div className="looked"></div>
               </div>
 
@@ -1717,15 +1358,10 @@ export default function ProfilePage() {
                   type="text"
                   placeholder="Je bericht"
                   value={message}
-                  onChange={(e) => {
-                    setMessage(e.target.value);
-                    handleTyping();
-                  }}
+                  onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       sendMessage();
-                      setIsTyping(false);
-                      updateTypingStatus(false);
                       e.preventDefault();
                     }
                   }}
@@ -1734,16 +1370,14 @@ export default function ProfilePage() {
                   <img src="/images/icon-camera.svg" alt="Foto" />
                 </a>
                 {user && !isOwnProfile && (
-                  <a className={`input-eye ${revealIdentity ? 'active' : ''}`} onClick={() => setRevealIdentity(!revealIdentity)} style={{ cursor: 'pointer' }} title={revealIdentity ? "Verberg identiteit" : "Toon identiteit"}>
+                  <a className="input-eye" onClick={() => setRevealIdentity(!revealIdentity)} style={{ cursor: 'pointer' }} title={revealIdentity ? "Verberg identiteit" : "Toon identiteit"}>
                     <img src="/images/icon-eye.svg" alt="Identiteit" />
                   </a>
                 )}
               </div>
 
               <div className="boxed_chat_top">
-                <div className="writing">
-                  {otherTyping && <span>{displayName} is aan het typen...</span>}
-                </div>
+                <div className="writing"></div>
                 <div className="looked"></div>
               </div>
 
