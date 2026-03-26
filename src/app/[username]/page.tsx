@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { db, storage, auth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { Conversation, ChatMsg, getAnonId, generateAnonName } from '@/lib/chat';
 import './profile.css';
@@ -91,6 +92,11 @@ export default function ProfilePage() {
   const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
   const [showProfilePicChange, setShowProfilePicChange] = useState(false);
   const [selectedProfilePic, setSelectedProfilePic] = useState<string | null>(null);
+  const [followingList, setFollowingList] = useState<any[]>([]);
+  const [popularUsers, setPopularUsers] = useState<any[]>([]);
+  const [storedMessages, setStoredMessages] = useState<any[]>([]);
+  const [selectedStoredMsgs, setSelectedStoredMsgs] = useState<Set<string>>(new Set());
+  const [isFollowing, setIsFollowing] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactUsername, setContactUsername] = useState('');
@@ -227,7 +233,85 @@ export default function ProfilePage() {
         if (data.blockedUsers) {
           setBlockedSenders(new Set(data.blockedUsers));
         }
+        // Load settings from Firestore
+        setShowOnlineList(data.showOnlineList !== false);
+        setAllowPhotos(data.allowPhotos !== false);
+        setPrivacyShowCount(data.privacyShowCount !== false);
+        setPrivacyShowPopular(data.privacyShowPopular === true);
+        if (data.themeColor) {
+          setSettingsColor(data.themeColor);
+        }
       }
+    });
+    return () => unsubscribe();
+  }, [user, isOwnProfile]);
+
+  /* Load following list for profile owner */
+  useEffect(() => {
+    if (!user || !isOwnProfile) return;
+    const followingRef = collection(db, 'users', user.uid, 'following');
+    const unsubscribe = onSnapshot(followingRef, async (snap) => {
+      const followingIds = snap.docs.map(d => d.id);
+      if (followingIds.length === 0) {
+        setFollowingList([]);
+        return;
+      }
+      // Fetch user details for each followed user
+      const usersData = await Promise.all(
+        followingIds.map(async (uid) => {
+          const userDoc = await getDoc(doc(db, 'users', uid));
+          if (userDoc.exists()) {
+            return { uid, ...userDoc.data() };
+          }
+          return null;
+        })
+      );
+      setFollowingList(usersData.filter(Boolean));
+    });
+    return () => unsubscribe();
+  }, [user, isOwnProfile]);
+
+  /* Check if current user is following this profile */
+  useEffect(() => {
+    if (!user || isOwnProfile || !profileData?.uid) return;
+    const followRef = doc(db, 'users', user.uid, 'following', profileData.uid);
+    const unsubscribe = onSnapshot(followRef, (snap) => {
+      setIsFollowing(snap.exists());
+    });
+    return () => unsubscribe();
+  }, [user, isOwnProfile, profileData?.uid]);
+
+  /* Load popular users (top 100 by veil count) */
+  useEffect(() => {
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snap) => {
+      const usersData = snap.docs.map(doc => ({
+        uid: doc.id,
+        ...(doc.data() as any)
+      }));
+      // Calculate total veils and sort
+      const withVeils = usersData.map(u => ({
+        ...u,
+        totalVeils: (u.veil1 || 0) + (u.veil2 || 0) + (u.veil3 || 0) + (u.veil4 || 0)
+      }));
+      const sorted = withVeils.sort((a, b) => b.totalVeils - a.totalVeils).slice(0, 100);
+      setPopularUsers(sorted);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  /* Load stored messages for profile owner */
+  useEffect(() => {
+    if (!user || !isOwnProfile) return;
+    const messagesRef = collection(db, 'users', user.uid, 'storedMessages');
+    const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(100));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const msgs = snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate?.() || new Date()
+      }));
+      setStoredMessages(msgs);
     });
     return () => unsubscribe();
   }, [user, isOwnProfile]);
@@ -740,11 +824,13 @@ export default function ProfilePage() {
   async function handlePasswordReset() {
     if (!user?.email) return;
     try {
-      // In a real app, you'd use Firebase sendPasswordResetEmail
-      // For now, we'll simulate the success
+      await sendPasswordResetEmail(auth, user.email);
+      setSettingsUpdated(true);
       alert(`Er is een e-mail gestuurd naar ${user.email} om je wachtwoord te herstellen.`);
+      setTimeout(() => setSettingsUpdated(false), 3000);
     } catch (error) {
       console.error('Error sending password reset:', error);
+      alert('Er is een fout opgetreden bij het versturen van de e-mail. Probeer het later opnieuw.');
     }
   }
 
@@ -1016,7 +1102,7 @@ export default function ProfilePage() {
             </div>
             {settingsUpdated && (
               <div className="settings-success-inner">
-                Ayarların Başarıyla Güncellendi.
+                Instellingen zijn bijgewerkt.
               </div>
             )}
             <div className="modal-settings-body">
