@@ -100,6 +100,8 @@ export default function ProfilePage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const chatStartTime = useRef<number | null>(null);
+  const [veilsGivenToday, setVeilsGivenToday] = useState<Record<number, boolean>>({});
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactUsername, setContactUsername] = useState('');
@@ -283,6 +285,23 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [user, isOwnProfile, profileData?.uid]);
 
+  /* Load today's veil records for this profile (visitor only) */
+  useEffect(() => {
+    if (!user || !profileData?.uid || isOwnProfile) return;
+    const today = new Date().toISOString().split('T')[0];
+    const veilRecordId = `${user.uid}_${profileData.uid}_${today}`;
+    const veilRecordRef = doc(db, 'veilRecords', veilRecordId);
+    const unsubscribe = onSnapshot(veilRecordRef, (snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setVeilsGivenToday({ 0: !!d.v0, 1: !!d.v1, 2: !!d.v2, 3: !!d.v3 });
+      } else {
+        setVeilsGivenToday({});
+      }
+    });
+    return () => unsubscribe();
+  }, [user, profileData?.uid, isOwnProfile]);
+
   /* Load persisted settings (showOnlineList, allowPhotos) for own profile */
   useEffect(() => {
     if (!user || !isOwnProfile) return;
@@ -408,6 +427,7 @@ export default function ProfilePage() {
     
     const q = query(msgsRef, orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      const anonId = getAnonId();
       const newMsgs = snapshot.docs
         .map((d) => {
           const data = d.data();
@@ -417,14 +437,20 @@ export default function ProfilePage() {
             sender: data.sender || 'Anoniem',
             senderUid: data.senderUid || null,
             text: data.text || '',
+            photoUrl: data.photoUrl || undefined,
             time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
             createdAt: ts,
           } as ChatMsg;
         })
-        // Only show messages sent AFTER visitor opened the page
         .filter((msg) => msg.createdAt > sessionStart)
-        // Additional safety: only show messages from the last 30 seconds
-        .filter((msg) => (Date.now() - msg.createdAt.getTime()) < 30000);
+        .filter((msg) => {
+          const myId = user?.uid || anonId;
+          // Show: my own messages, owner's messages directed at me or broadcast
+          return (
+            msg.senderUid === myId ||
+            (msg.senderUid !== myId && ((msg as any).recipientUid === myId || !(msg as any).recipientUid))
+          );
+        });
       setMessages(newMsgs);
       
       // Auto-create conversation when visitor sends message
@@ -474,21 +500,18 @@ export default function ProfilePage() {
           sender: senderName,
           senderUid: data.senderUid || null,
           text: data.text || '',
+          photoUrl: data.photoUrl || undefined,
           time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
           createdAt: ts,
           seen: data.seen || false,
         } as ChatMsg;
       });
       
-      // ONLY show messages from current session (after login)
-      const sessionMsgs = allMsgs.filter(msg => {
-        // For profile owner: only show messages from others, not own messages
-        if (isOwnProfile) {
-          return msg.senderUid !== user?.uid && msg.createdAt.getTime() > sessionStartTime.current;
-        }
-        // For visitors: show all messages from current session
-        return msg.createdAt.getTime() > sessionStartTime.current;
-      });
+      // Show messages from last 24 hours from other users
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      const sessionMsgs = allMsgs.filter(msg =>
+        msg.senderUid !== user?.uid && msg.createdAt.getTime() > cutoff
+      );
       
       // Update user activity tracking
       const newActivityMap = new Map<string, number>();
@@ -554,29 +577,28 @@ export default function ProfilePage() {
   /* Send message to Firestore */
   async function sendMessage() {
     if (!message.trim() || !profileData?.uid) return;
-    
-    // Profile owner replies - use username not name
+
     if (isOwnProfile) {
       const senderName = myProfile?.username || 'Eigenaar';
       try {
         await addDoc(collection(db, 'chats', profileData.uid, 'messages'), {
           sender: senderName,
           senderUid: user?.uid,
+          recipientUid: activeConversation,
           text: message,
           createdAt: serverTimestamp(),
         });
         setMessage('');
-      } catch {
-        /* silently fail */
-      }
+      } catch { /* silently fail */ }
       return;
     }
-    
+
+    // Track when visitor first sends a message (for 3-min veil timer)
+    if (!chatStartTime.current) chatStartTime.current = Date.now();
+
     const anonId = getAnonId();
-    const senderName = user && revealIdentity ? myProfile?.name || username : generateAnonName();
-    
+    const senderName = user && revealIdentity ? myProfile?.name || username : anonId;
     try {
-      // For visitors: use legacy single chat
       await addDoc(collection(db, 'chats', profileData.uid, 'messages'), {
         sender: senderName,
         senderUid: user?.uid || anonId,
@@ -584,9 +606,7 @@ export default function ProfilePage() {
         createdAt: serverTimestamp(),
       });
       setMessage('');
-    } catch {
-      /* silently fail */
-    }
+    } catch { /* silently fail */ }
   }
 
   /* Create conversation when visitor sends first message */
@@ -632,25 +652,40 @@ export default function ProfilePage() {
 
   /* Give a veil to this profile */
   async function giveVeil(idx: number) {
-    if (!profileData?.uid || isOwnProfile) return;
-    
-    // Check if user has already voted for this profile in this session (basic prevention)
-    const voteKey = `veil_voted_${profileData.uid}_${idx}`;
-    if (localStorage.getItem(voteKey)) return;
+    if (!user) { showToastMsg('Je moet ingelogd zijn om een Veil te geven.'); return; }
+    if (isOwnProfile) { showToastMsg('Je kunt jezelf geen Veil geven.'); return; }
+    if (!profileData?.uid) return;
 
+    if (!chatStartTime.current || Date.now() - chatStartTime.current < 3 * 60 * 1000) {
+      const remaining = chatStartTime.current
+        ? Math.ceil((3 * 60 * 1000 - (Date.now() - chatStartTime.current)) / 1000)
+        : 180;
+      showToastMsg(`Chat nog ${remaining}s voor je een Veil kunt geven.`);
+      return;
+    }
+
+    if (veilsGivenToday[idx]) { showToastMsg('Je hebt dit Veil vandaag al gegeven.'); return; }
+
+    const today = new Date().toISOString().split('T')[0];
+    const veilRecordId = `${user.uid}_${profileData.uid}_${today}`;
+    const veilRecordRef = doc(db, 'veilRecords', veilRecordId);
     const field = `veil${idx + 1}`;
     try {
-      const userRef = doc(db, 'users', profileData.uid);
-      await updateDoc(userRef, { 
-        [field]: increment(1) 
+      const profileRef = doc(db, 'users', profileData.uid);
+      const profileSnap = await getDoc(profileRef);
+      const currentData = profileSnap.data() || {};
+      const tv = currentData.todayVeils || {};
+      const newDailyCount = tv.date === today ? (tv.count || 0) + 1 : 1;
+
+      await updateDoc(profileRef, {
+        [field]: increment(1),
+        'todayVeils.date': today,
+        'todayVeils.count': newDailyCount,
       });
-      
-      // Update local state immediately
-      setProfileData((prev) =>
-        prev ? { ...prev, [field]: (prev[field as keyof ProfileData] as number) + 1 } : prev
-      );
-      
-      localStorage.setItem(voteKey, 'true');
+      await setDoc(veilRecordRef, { [`v${idx}`]: true, updatedAt: serverTimestamp() }, { merge: true });
+
+      setProfileData(prev => prev ? { ...prev, [field]: (prev[field as keyof ProfileData] as number) + 1 } : prev);
+      showToastMsg('Veil gegeven! 🎉');
     } catch (error) {
       console.error('Error giving veil:', error);
     }
@@ -869,13 +904,15 @@ export default function ProfilePage() {
       await uploadBytes(storageReference, file);
       const downloadURL = await getDownloadURL(storageReference);
       const anonId = getAnonId();
+      if (!isOwnProfile && !chatStartTime.current) chatStartTime.current = Date.now();
       const senderName = isOwnProfile
         ? (myProfile?.username || 'Eigenaar')
-        : (user && revealIdentity ? (myProfile?.name || username) : generateAnonName());
+        : (user && revealIdentity ? (myProfile?.name || username) : anonId);
       await addDoc(collection(db, 'chats', profileData.uid, 'messages'), {
         sender: senderName,
         senderUid: isOwnProfile ? user?.uid : (user?.uid || anonId),
-        text: `[Foto]`,
+        recipientUid: isOwnProfile ? activeConversation : undefined,
+        text: '[Foto]',
         photoUrl: downloadURL,
         createdAt: serverTimestamp(),
       });
@@ -1375,6 +1412,7 @@ export default function ProfilePage() {
             style={{ cursor: isOwnProfile ? 'pointer' : 'default' }}
           >
             <img
+              key={selectedProfilePic || profileImg}
               src={selectedProfilePic || profileImg}
               alt={`${displayName} profielfoto`}
             />
@@ -1535,7 +1573,10 @@ export default function ProfilePage() {
                               <span>{msg.text}</span>
                             ) : (
                               <>
-                                <strong>{msg.sender}</strong>: {msg.text} 
+                                <strong>{msg.sender}</strong>:{' '}
+                                {msg.photoUrl ? (
+                                  <img src={msg.photoUrl} alt="foto" style={{ maxWidth: 200, display: 'block', marginTop: 4, borderRadius: 3 }} />
+                                ) : msg.text}
                                 <span className="msg-time">{msg.time}</span>
                                 {msg.seen && <span className="msg-seen">gezien</span>}
                               </>
@@ -1563,7 +1604,7 @@ export default function ProfilePage() {
                 <div className="share-bar-icons">
                   <a className="share-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Facebook">f</a>
                   <a className="share-x" href={`https://twitter.com/intent/tweet?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="X">𝕏</a>
-                  <a className="share-google" href={`https://api.whatsapp.com/send?text=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">W</a>
+                  <a className="share-google" href={`https://api.whatsapp.com/send?text=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{ display:'inline-flex', alignItems:'center', justifyContent:'center' }}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>
                 </div>
               </div>
             </div>
@@ -1599,18 +1640,15 @@ export default function ProfilePage() {
                 <div className="looked"></div>
               </div>
 
-              {/* Visitor Bio Section */}
-              {(bio || city) && (
-                <div className="prof-bio" style={{ padding: '10px 15px', borderBottom: '1px solid #eee', fontSize: 13, color: '#555' }}>
-                  {bio}{bio && city ? ' - ' : ''}{city}
-                </div>
-              )}
-
               {/* Messages */}
               <div className="message_box">
                 {[...messages].reverse().map((msg) => (
                   <div key={msg.id} className="chat-msg">
-                    <strong>{msg.sender}</strong> : {msg.text} <span>{msg.time}</span>
+                    <strong>{msg.sender}</strong>:{' '}
+                    {msg.photoUrl ? (
+                      <img src={msg.photoUrl} alt="foto" style={{ maxWidth: 200, display: 'block', marginTop: 4, borderRadius: 3 }} />
+                    ) : msg.text}
+                    <span>{msg.time}</span>
                   </div>
                 ))}
               </div>
@@ -1624,7 +1662,7 @@ export default function ProfilePage() {
                 <div className="share-bar-icons">
                   <a className="share-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Facebook">f</a>
                   <a className="share-x" href={`https://twitter.com/intent/tweet?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="X">𝕏</a>
-                  <a className="share-google" href={`https://api.whatsapp.com/send?text=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">W</a>
+                  <a className="share-google" href={`https://api.whatsapp.com/send?text=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{ display:'inline-flex', alignItems:'center', justifyContent:'center' }}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>
                 </div>
               </div>
             </div>
@@ -1633,20 +1671,12 @@ export default function ProfilePage() {
           {/* ═══════ PROMOTE BAR ═══════ */}
           <div className="promote-bar">
             <span>TOON JE PROFIEL BOVENAAN DE ONLINE LIJST</span>
-            <a 
-              className="promote-btn" 
-              onClick={() => {
-                if (isOwnProfile && user) {
-                  updateDoc(doc(db, 'users', user.uid), {
-                    lastSeen: serverTimestamp(),
-                    isPromoted: true,
-                    updatedAt: serverTimestamp()
-                  }).then(() => { setPromoteSuccess(true); setTimeout(() => setPromoteSuccess(false), 3000); });
-                }
-              }}
-              style={{ cursor: isOwnProfile ? 'pointer' : 'default' }}
+            <a
+              className="promote-btn"
+              onClick={() => showToastMsg('Dienst binnenkort beschikbaar.')}
+              style={{ cursor: 'pointer' }}
             >
-              {promoteSuccess ? '✔ GEACTIVEERD!' : '✔ NU ACTIVEREN'}
+              ✔ NU ACTIVEREN
             </a>
           </div>
 

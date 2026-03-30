@@ -1154,6 +1154,10 @@
   object-fit: cover;
 }
 
+.online-item {
+  position: relative;
+}
+
 .online-tooltip {
   position: absolute;
   bottom: 100%;

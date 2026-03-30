@@ -99,18 +99,17 @@ export default function HomePage() {
   /* ── Online Users state ── */
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [filteredOnlineUsers, setFilteredOnlineUsers] = useState<any[]>([]);
+  const [dailyLeader, setDailyLeader] = useState<any>(null);
 
-  /* Fetch all users for search and online status */
+  /* Fetch all users for search, online status, and daily leader */
   useEffect(() => {
     const usersRef = collection(db, 'users');
     const unsubscribe = onSnapshot(usersRef, (snap) => {
-      const usersData = snap.docs.map(doc => ({
-        uid: doc.id,
-        ...(doc.data() as any)
-      }));
-
-      // Filter for online users (active in last 5 minutes)
+      const usersData = snap.docs.map(d => ({ uid: d.id, ...(d.data() as any) }));
       const now = Date.now();
+      const today = new Date().toISOString().split('T')[0];
+
+      // Online users (active in last 5 min)
       const online = usersData
         .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000)
         .map(u => ({
@@ -122,6 +121,24 @@ export default function HomePage() {
         }));
       setOnlineUsers(online);
       setFilteredOnlineUsers(online);
+
+      // Daily leader: highest todayVeils.count for today, not featured in last 3 days
+      const candidates = usersData
+        .filter(u => u.todayVeils?.date === today && (u.todayVeils?.count || 0) > 0)
+        .filter(u => {
+          if (!u.lastFeaturedDate) return true;
+          const diff = Math.floor((now - new Date(u.lastFeaturedDate).getTime()) / 86400000);
+          return diff >= 3;
+        })
+        .sort((a, b) => (b.todayVeils?.count || 0) - (a.todayVeils?.count || 0));
+
+      const leader = candidates[0] || null;
+      setDailyLeader(leader);
+
+      // Mark as featured (once per day)
+      if (leader && leader.lastFeaturedDate !== today) {
+        updateDoc(doc(db, 'users', leader.uid), { lastFeaturedDate: today }).catch(() => {});
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -424,19 +441,30 @@ export default function HomePage() {
 
           {/* Popular user card */}
           <div className="home_pop">
-            <a onClick={() => { setSearchQuery(''); setSearchActive(false); }} style={{ cursor: 'pointer' }}>
-              <img
-                src="/images/default-avatar.svg"
-                alt="Populaire gebruiker profielfoto"
-              />
-              <div>
-                <strong>POPULAIR</strong>
-                <h3>Gebruiker</h3>
-                <p>
-                  Vandaag <b>{onlineUsers.length}</b> Online
-                </p>
-              </div>
-            </a>
+            {dailyLeader ? (
+              <a href={`/${dailyLeader.username}`} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={dailyLeader.profileImg || '/images/default-avatar.svg'}
+                  alt={`${dailyLeader.displayName || dailyLeader.username} profielfoto`}
+                />
+                <div>
+                  <strong>POPULAIR VAN VANDAAG</strong>
+                  <h3>{dailyLeader.displayName || dailyLeader.username}</h3>
+                  <p>
+                    Vandaag <b>{dailyLeader.todayVeils?.count || 0}</b> Veils ontvangen
+                  </p>
+                </div>
+              </a>
+            ) : (
+              <a style={{ cursor: 'default' }}>
+                <img src="/images/default-avatar.svg" alt="Populaire gebruiker" />
+                <div>
+                  <strong>POPULAIR VAN VANDAAG</strong>
+                  <h3>Nog geen winnaar</h3>
+                  <p>Vandaag <b>{onlineUsers.length}</b> Online</p>
+                </div>
+              </a>
+            )}
           </div>
 
           {/* User grid */}

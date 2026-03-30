@@ -12,6 +12,7 @@ export interface ChatMsg {
   sender: string;
   senderUid: string | null;
   text: string;
+  photoUrl?: string;
   time: string;
   createdAt: Date;
   seen?: boolean;
@@ -28,5 +29,5 @@ export function getAnonId(): string {
 }
 
 export function generateAnonName(): string {
-  return 'Anony-' + Math.random().toString(36).substring(2, 8);
+  return getAnonId();
 }
