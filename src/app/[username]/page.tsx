@@ -38,6 +38,7 @@ interface ProfileData {
   veil2: number;
   veil3: number;
   veil4: number;
+  allowPhotos: boolean;
 }
 
 const VEIL_ITEMS = [
@@ -102,6 +103,9 @@ export default function ProfilePage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const chatStartTime = useRef<number | null>(null);
   const [veilsGivenToday, setVeilsGivenToday] = useState<Record<number, boolean>>({});
+  const [closedConversations, setClosedConversations] = useState<Set<string>>(new Set());
+  const [isVisitorBlocked, setIsVisitorBlocked] = useState(false);
+  const [visitorChatClosed, setVisitorChatClosed] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactUsername, setContactUsername] = useState('');
@@ -179,10 +183,10 @@ export default function ProfilePage() {
       }));
       setAllUsers(usersData);
 
-      // Filter for online users (active in last 5 minutes) and sort by promoted status and lastSeen
+      // Filter for online users (active in last 5 minutes, opted-in to list)
       const now = Date.now();
       const online = usersData
-        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000)
+        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000 && u.showInOnlineList !== false)
         .sort((a, b) => {
           // First sort by isPromoted
           if (a.isPromoted && !b.isPromoted) return -1;
@@ -302,6 +306,32 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [user, profileData?.uid, isOwnProfile]);
 
+  /* Check if visiting user is blocked by profile owner (visitor only) */
+  useEffect(() => {
+    if (isOwnProfile || !profileData?.uid) return;
+    const anonId = getAnonId();
+    const myId = user?.uid || anonId;
+    const profileRef = doc(db, 'users', profileData.uid);
+    const unsubscribe = onSnapshot(profileRef, (snap) => {
+      if (snap.exists()) {
+        const blocked: string[] = snap.data().blockedUsers || [];
+        setIsVisitorBlocked(blocked.includes(myId));
+      }
+    });
+    return () => unsubscribe();
+  }, [isOwnProfile, profileData?.uid, user?.uid]);
+
+  /* Owner: listen for visitor close signals */
+  useEffect(() => {
+    if (!isOwnProfile || !profileData?.uid) return;
+    const closedRef = collection(db, 'chats', profileData.uid, 'closed');
+    const unsubscribe = onSnapshot(closedRef, (snap) => {
+      const ids = snap.docs.map(d => d.id);
+      setClosedConversations(new Set(ids));
+    });
+    return () => unsubscribe();
+  }, [isOwnProfile, profileData?.uid]);
+
   /* Load persisted settings (showOnlineList, allowPhotos) for own profile */
   useEffect(() => {
     if (!user || !isOwnProfile) return;
@@ -356,6 +386,7 @@ export default function ProfilePage() {
               veil2: docData.veil2 || 0,
               veil3: docData.veil3 || 0,
               veil4: docData.veil4 || 0,
+              allowPhotos: docData.allowPhotos !== false,
             });
             setProfileNotFound(false);
           } else {
@@ -507,11 +538,14 @@ export default function ProfilePage() {
         } as ChatMsg;
       });
       
-      // Show messages from last 24 hours from other users
-      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-      const sessionMsgs = allMsgs.filter(msg =>
-        msg.senderUid !== user?.uid && msg.createdAt.getTime() > cutoff
-      );
+      // Session-only: messages from this session (after page load)
+      // Include both incoming messages AND the owner's own replies
+      // Exclude blocked senders
+      const sessionMsgs = allMsgs.filter(msg => {
+        if (msg.createdAt.getTime() <= sessionStartTime.current) return false;
+        if (msg.senderUid && msg.senderUid !== user?.uid && blockedSenders.has(msg.senderUid)) return false;
+        return true;
+      });
       
       // Update user activity tracking
       const newActivityMap = new Map<string, number>();
@@ -593,6 +627,10 @@ export default function ProfilePage() {
       return;
     }
 
+    // Block check
+    if (isVisitorBlocked) { showToastMsg('Je bent geblokkeerd en kunt geen berichten sturen.'); return; }
+    if (visitorChatClosed) { showToastMsg('Chat is gesloten.'); return; }
+
     // Track when visitor first sends a message (for 3-min veil timer)
     if (!chatStartTime.current) chatStartTime.current = Date.now();
 
@@ -607,6 +645,19 @@ export default function ProfilePage() {
       });
       setMessage('');
     } catch { /* silently fail */ }
+  }
+
+  /* Visitor closes the chat */
+  async function handleVisitorCloseChat() {
+    if (!profileData?.uid) return;
+    const anonId = getAnonId();
+    const myId = user?.uid || anonId;
+    try {
+      await setDoc(doc(db, 'chats', profileData.uid, 'closed', myId), {
+        closedAt: serverTimestamp(),
+      });
+    } catch { /* silently fail */ }
+    setVisitorChatClosed(true);
   }
 
   /* Create conversation when visitor sends first message */
@@ -742,19 +793,18 @@ export default function ProfilePage() {
         reader.readAsDataURL(file);
 
         // Upload to Firebase Storage
-        const storagePath = `profile-pictures/${profileData.uid}_${Date.now()}`; // Use timestamp to force unique URL and avoid cache issues
+        const storagePath = `profile-pictures/${profileData.uid}_${Date.now()}`;
         const storageReference = storageRef(storage, storagePath);
         
         await uploadBytes(storageReference, file);
         const downloadURL = await getDownloadURL(storageReference);
         
-        // Update profile in Firestore with merge: true
-        // We use user.uid directly from auth to be 100% sure we are updating the correct logged-in user
+        // Update profile in Firestore (updateDoc is more reliable for existing documents)
         if (user) {
-          await setDoc(doc(db, 'users', user.uid), {
+          await updateDoc(doc(db, 'users', user.uid), {
             profileImg: downloadURL,
             updatedAt: serverTimestamp()
-          }, { merge: true });
+          });
         }
 
         // Update local state for immediate feedback
@@ -847,7 +897,7 @@ export default function ProfilePage() {
   }
 
   async function handleClearBlocks() {
-    if (!user || !window.confirm('Weet je zeker dat je alle blokkades wilt verwijderen?')) return;
+    if (!user) return;
     try {
       await updateDoc(doc(db, 'users', user.uid), {
         blockedUsers: []
@@ -898,6 +948,16 @@ export default function ProfilePage() {
   async function handlePhotoSend(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !profileData?.uid) return;
+    if (!isOwnProfile && profileData.allowPhotos === false) {
+      showToastMsg('Dit profiel accepteert geen foto\'s.');
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      return;
+    }
+    if (!isOwnProfile && isVisitorBlocked) {
+      showToastMsg('Je bent geblokkeerd en kunt geen foto\'s sturen.');
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      return;
+    }
     try {
       const storagePath = `chat-photos/${profileData.uid}_${Date.now()}`;
       const storageReference = storageRef(storage, storagePath);
@@ -1518,15 +1578,16 @@ export default function ProfilePage() {
               <div className="input_box">
                 <input
                   type="text"
-                  placeholder="Je bericht"
+                  placeholder={activeConversation && closedConversations.has(activeConversation) ? 'Gesprek gesloten' : 'Je bericht'}
+                  disabled={!activeConversation || closedConversations.has(activeConversation)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && activeConversation) {
+                    if (e.key === 'Enter' && activeConversation && !closedConversations.has(activeConversation)) {
                       const input = e.target as HTMLInputElement;
                       if (input.value.trim()) {
                         addDoc(collection(db, 'chats', profileData!.uid, 'messages'), {
                           sender: myProfile?.username || 'Eigenaar',
                           senderUid: user?.uid,
-                          recipientUid: activeConversation, // Tag message for specific recipient
+                          recipientUid: activeConversation,
                           text: input.value,
                           createdAt: serverTimestamp(),
                         });
@@ -1615,7 +1676,8 @@ export default function ProfilePage() {
               <div className="input_box">
                 <input
                   type="text"
-                  placeholder="Je bericht"
+                  placeholder={visitorChatClosed || isVisitorBlocked ? 'Chat is gesloten' : 'Je bericht'}
+                  disabled={visitorChatClosed || isVisitorBlocked}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => {
@@ -1625,13 +1687,18 @@ export default function ProfilePage() {
                     }
                   }}
                 />
-                <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
-                  <img src="/images/icon-camera.svg" alt="Foto" />
-                </a>
-                {user && !isOwnProfile && (
+                {!visitorChatClosed && !isVisitorBlocked && (
+                  <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
+                    <img src="/images/icon-camera.svg" alt="Foto" />
+                  </a>
+                )}
+                {user && !isOwnProfile && !visitorChatClosed && (
                   <a className="input-eye" onClick={() => setRevealIdentity(!revealIdentity)} style={{ cursor: 'pointer' }} title={revealIdentity ? "Verberg identiteit" : "Toon identiteit"}>
                     <img src="/images/icon-eye.svg" alt="Identiteit" />
                   </a>
+                )}
+                {!visitorChatClosed && (
+                  <a style={{ cursor: 'pointer', marginLeft: 6, color: '#999', fontSize: 16, lineHeight: '34px' }} onClick={handleVisitorCloseChat} title="Sluit chat">✕</a>
                 )}
               </div>
 
@@ -1730,8 +1797,6 @@ export default function ProfilePage() {
           <div className="prof-footer">
             <span>Veilo © 2026</span>
             <ul>
-              <li><Link href="/beleid">Beleid</Link></li>
-              <li><a style={{ cursor: 'pointer' }} onClick={() => setShowContact(true)}>Contact</a></li>
               <li><a style={{ cursor: 'pointer' }} onClick={() => setShowContact(true)}>Help</a></li>
             </ul>
           </div>

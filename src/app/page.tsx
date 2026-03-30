@@ -109,9 +109,9 @@ export default function HomePage() {
       const now = Date.now();
       const today = new Date().toISOString().split('T')[0];
 
-      // Online users (active in last 5 min)
+      // Online users (active in last 5 min, and opted-in to online list)
       const online = usersData
-        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000)
+        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000 && u.showInOnlineList !== false)
         .map(u => ({
           username: u.username || '',
           img: u.profileImg || '/images/default-avatar.svg',
@@ -448,10 +448,10 @@ export default function HomePage() {
                   alt={`${dailyLeader.displayName || dailyLeader.username} profielfoto`}
                 />
                 <div>
-                  <strong>POPULAIR VAN VANDAAG</strong>
+                  <strong>POPULAIR</strong>
                   <h3>{dailyLeader.displayName || dailyLeader.username}</h3>
                   <p>
-                    Vandaag <b>{dailyLeader.todayVeils?.count || 0}</b> Veils ontvangen
+                    Vandaag <b>{dailyLeader.todayVeils?.count || 0}</b> Veil
                   </p>
                 </div>
               </a>
@@ -459,9 +459,9 @@ export default function HomePage() {
               <a style={{ cursor: 'default' }}>
                 <img src="/images/default-avatar.svg" alt="Populaire gebruiker" />
                 <div>
-                  <strong>POPULAIR VAN VANDAAG</strong>
+                  <strong>POPULAIR</strong>
                   <h3>Nog geen winnaar</h3>
-                  <p>Vandaag <b>{onlineUsers.length}</b> Online</p>
+                  <p>Vandaag <b>0</b> Veil</p>
                 </div>
               </a>
             )}

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
 interface UserProfile {
@@ -36,12 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let profileUnsub: (() => void) | null = null;
+
+    const authUnsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+      if (profileUnsub) { profileUnsub(); profileUnsub = null; }
+
       if (firebaseUser) {
-        try {
-          const docRef = doc(db, 'users', firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
+        const docRef = doc(db, 'users', firebaseUser.uid);
+        profileUnsub = onSnapshot(docRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setProfile({
@@ -64,15 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               followers: 0,
             });
           }
-        } catch {
-          setProfile(null);
-        }
+          setLoading(false);
+        }, () => { setProfile(null); setLoading(false); });
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => { authUnsub(); if (profileUnsub) profileUnsub(); };
   }, []);
 
   async function logout() {
