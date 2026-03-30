@@ -236,20 +236,28 @@ export default function ProfilePage() {
     setFilteredOnlineUsers(filtered);
   }, [searchCity, onlineUsers, allUsers]);
 
-  /* Load popular users by total veil count */
+  /* Load top-5 popular users by today's Veils (3-day cooldown for #1) */
   useEffect(() => {
     const usersRef = collection(db, 'users');
     const unsubscribe = onSnapshot(usersRef, (snap) => {
+      const now = Date.now();
+      const today = new Date().toISOString().split('T')[0];
       const usersData = snap.docs.map(d => ({ uid: d.id, ...(d.data() as any) }));
-      const sorted = usersData
-        .map(u => ({
-          ...u,
-          totalVeils: (u.veil1 || 0) + (u.veil2 || 0) + (u.veil3 || 0) + (u.veil4 || 0)
-        }))
-        .filter(u => u.totalVeils > 0)
-        .sort((a, b) => b.totalVeils - a.totalVeils)
-        .slice(0, 20);
-      setPopularUsers(sorted);
+      const top5 = usersData
+        .filter(u => u.todayVeils?.date === today && (u.todayVeils?.count || 0) > 0)
+        .filter(u => {
+          if (!u.lastFeaturedDate) return true;
+          const diff = Math.floor((now - new Date(u.lastFeaturedDate).getTime()) / 86400000);
+          return diff >= 3;
+        })
+        .sort((a, b) => (b.todayVeils?.count || 0) - (a.todayVeils?.count || 0))
+        .slice(0, 5);
+      setPopularUsers(top5);
+      // Mark #1 with lastFeaturedDate
+      const first = top5[0];
+      if (first && first.lastFeaturedDate !== today) {
+        updateDoc(doc(db, 'users', first.uid), { lastFeaturedDate: today }).catch(() => {});
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -1271,7 +1279,7 @@ export default function ProfilePage() {
                           <img src={u.profileImg || '/images/default-avatar.svg'} alt="" />
                           <div>
                             <strong>{u.displayName || u.name || u.username}</strong>
-                            <span>{u.totalVeils} Veils</span>
+                            <span>{u.todayVeils?.count || 0} Veils van vandaag</span>
                           </div>
                         </Link>
                       </li>

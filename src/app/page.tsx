@@ -132,26 +132,11 @@ export default function HomePage() {
         })
         .sort((a, b) => (b.todayVeils?.count || 0) - (a.todayVeils?.count || 0));
 
-      let leader = candidates[0] || null;
-
-      // Fallback: show all-time #1 by total veils when no today-qualified leader
-      if (!leader) {
-        const allTimeBest = [...usersData]
-          .filter(u => u.privacyShowPopular !== true)
-          .sort((a, b) => {
-            const bTotal = (b.veil1 || 0) + (b.veil2 || 0) + (b.veil3 || 0) + (b.veil4 || 0);
-            const aTotal = (a.veil1 || 0) + (a.veil2 || 0) + (a.veil3 || 0) + (a.veil4 || 0);
-            return bTotal - aTotal;
-          })[0];
-        if (allTimeBest && ((allTimeBest.veil1 || 0) + (allTimeBest.veil2 || 0) + (allTimeBest.veil3 || 0) + (allTimeBest.veil4 || 0)) > 0) {
-          leader = allTimeBest;
-        }
-      }
-
+      const leader = candidates[0] || null;
       setDailyLeader(leader);
 
-      // Mark as featured (once per day) — only for today's qualified leader
-      if (leader && leader.todayVeils?.date === today && leader.lastFeaturedDate !== today) {
+      // Mark as featured (once per day)
+      if (leader && leader.lastFeaturedDate !== today) {
         updateDoc(doc(db, 'users', leader.uid), { lastFeaturedDate: today }).catch(() => {});
       }
     });
@@ -454,7 +439,7 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Popular user card */}
+          {/* Popular user card — only shown when someone has today's Veils and passes 3-day cooldown */}
           <div className="home_pop">
             {dailyLeader ? (
               <a href={`/${dailyLeader.username}`} target="_blank" rel="noopener noreferrer">
@@ -470,16 +455,7 @@ export default function HomePage() {
                   </p>
                 </div>
               </a>
-            ) : (
-              <a style={{ cursor: 'default' }}>
-                <img src="/images/default-avatar.svg" alt="Populaire gebruiker" />
-                <div>
-                  <strong>POPULAIR</strong>
-                  <h3>Nog geen winnaar</h3>
-                  <p>Vandaag <b>0</b> Veil</p>
-                </div>
-              </a>
-            )}
+            ) : null}
           </div>
 
           {/* User grid */}
