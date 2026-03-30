@@ -39,6 +39,8 @@ interface ProfileData {
   veil3: number;
   veil4: number;
   allowPhotos: boolean;
+  privacyShowCount?: boolean;
+  totalConversations?: number;
 }
 
 const VEIL_ITEMS = [
@@ -108,6 +110,8 @@ export default function ProfilePage() {
   const [visitorChatClosed, setVisitorChatClosed] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
+  const [showPhotoAlert, setShowPhotoAlert] = useState(false);
+  const prevMsgCountRef = useRef<number>(0);
   const [contactUsername, setContactUsername] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
@@ -387,6 +391,8 @@ export default function ProfilePage() {
               veil3: docData.veil3 || 0,
               veil4: docData.veil4 || 0,
               allowPhotos: docData.allowPhotos !== false,
+              privacyShowCount: docData.privacyShowCount !== false,
+              totalConversations: docData.totalConversations || 0,
             });
             setProfileNotFound(false);
           } else {
@@ -517,11 +523,12 @@ export default function ProfilePage() {
         let senderName = data.sender || 'Anoniem';
         if (data.senderUid) {
           if (data.senderUid.startsWith('anon_')) {
-            // Extract consistent anonymous name from senderUid
             const anonId = data.senderUid.replace('anon_', '');
             senderName = `Anony-${anonId}`;
+          } else if (data.senderUid.startsWith('Anony-')) {
+            // Already in Anony-xxx format — use directly
+            senderName = data.senderUid;
           } else if (!user || data.senderUid !== user.uid) {
-            // For non-logged-in users, generate consistent name from senderUid
             const hash = data.senderUid.substring(0, 8);
             senderName = `Anony-${hash}`;
           }
@@ -571,7 +578,7 @@ export default function ProfilePage() {
         const senderMsgs = allMsgs.filter(m => m.senderUid === sender);
         const senderName = senderMsgs[0]?.sender || 'Anoniem';
         const isAnonymous = senderName.startsWith('Anony-');
-        const leftText = isAnonymous ? 'Anonymous left the conversation' : `${senderName} left the conversation`;
+        const leftText = `${senderName} heeft de chat verlaten`;
         
         return {
           id: `left-${sender}`,
@@ -608,6 +615,39 @@ export default function ProfilePage() {
     setMessages([]);
     setActiveConversation(null);
     // Don't clear profile data - it should persist
+  }, []);
+
+  /* Tab notification + sound on new message (owner only) */
+  useEffect(() => {
+    if (!isOwnProfile) return;
+    const incomingCount = messages.filter(m => m.senderUid !== user?.uid && !m.text.includes('heeft de chat verlaten')).length;
+    if (incomingCount > prevMsgCountRef.current) {
+      document.title = 'Nieuw bericht! | Veilo';
+      if (soundOn) {
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 880;
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.4);
+        } catch { /* audio not supported */ }
+      }
+    }
+    prevMsgCountRef.current = incomingCount;
+  }, [messages, isOwnProfile, soundOn]);
+
+  /* Restore tab title when user focuses the tab */
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden) document.title = 'Veilo';
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   /* Send message to Firestore */
@@ -672,7 +712,7 @@ export default function ProfilePage() {
     const q = query(convRef, where('anonId', '==', anonId));
     const snap = await getDocs(q);
     if (snap.empty) {
-      // Generate a consistent anon name for this conversation
+      try { await updateDoc(doc(db, 'users', profileData.uid), { totalConversations: increment(1) }); } catch { /* silently fail */ }
       const anonName = senderUid === user?.uid ? (revealIdentity ? myProfile?.name || username : generateAnonName()) : senderName;
       const convDoc = await addDoc(convRef, {
         anonName,
@@ -957,7 +997,12 @@ export default function ProfilePage() {
     const file = event.target.files?.[0];
     if (!file || !profileData?.uid) return;
     if (!isOwnProfile && profileData.allowPhotos === false) {
-      showToastMsg('Dit profiel accepteert geen foto\'s.');
+      setShowPhotoAlert(true);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      return;
+    }
+    if (!isOwnProfile && !chatStartTime.current) {
+      setShowPhotoAlert(true);
       if (photoInputRef.current) photoInputRef.current.value = '';
       return;
     }
@@ -1190,8 +1235,8 @@ export default function ProfilePage() {
               </>
             )}
             <li>
-              <a className="nav-btn nav-sound" onClick={() => setSoundOn(!soundOn)} style={{ cursor: 'pointer' }}>
-                <img src="/images/icon-sound.svg" alt="" />
+              <a className="nav-btn nav-sound" onClick={() => setSoundOn(!soundOn)} style={{ cursor: 'pointer' }} title={soundOn ? 'Geluid uit' : 'Geluid aan'}>
+                <img src={soundOn ? '/images/icon-sound.svg' : '/images/icon-sound-muted.svg'} alt="" />
               </a>
             </li>
           </ul>
@@ -1466,7 +1511,16 @@ export default function ProfilePage() {
       <div className="prof-container prof-top">
         {/* ═══════ ABOUT BOX ═══════ */}
         <div className="about_box">
-          <h2>{displayName}</h2>
+          <h2>
+            {displayName}
+            {profileData?.privacyShowCount && (profileData?.totalConversations || 0) >= 0 && (
+              <span className="conv-count-label">
+                {isOwnProfile
+                  ? ` (Je hebt tot nu toe met ${profileData.totalConversations || 0} mensen gesproken)`
+                  : ` (Heeft tot nu toe met ${profileData.totalConversations || 0} mensen gesproken)`}
+              </span>
+            )}
+          </h2>
           <span></span>
           {(bio || city) && <p>{bio}{bio && city ? ' - ' : ''}{city}</p>}
         </div>
@@ -1627,10 +1681,10 @@ export default function ProfilePage() {
                 {activeConversation && (
                   (() => {
                     // Show: 1) Messages FROM the anonymous user, 2) Messages TO the anonymous user (owner's replies)
-                    const activeMsgs = messages.filter(m => 
+                    const activeMsgs = [...messages.filter(m => 
                       m.senderUid === activeConversation || 
                       m.recipientUid === activeConversation
-                    );
+                    )].reverse();
                     return activeMsgs.length === 0 ? (
                       <div className="empty-chat">
                         <p style={{ color: '#999', textAlign: 'center', marginTop: 60 }}>
@@ -1640,8 +1694,8 @@ export default function ProfilePage() {
                     ) : (
                       <>
                         {activeMsgs.map((msg) => (
-                          <div key={msg.id} className={msg.text.includes('left the conversation') ? 'chat-msg user-left' : 'chat-msg'}>
-                            {msg.text.includes('left the conversation') ? (
+                          <div key={msg.id} className={msg.text.includes('heeft de chat verlaten') ? 'chat-msg user-left' : 'chat-msg'}>
+                            {msg.text.includes('heeft de chat verlaten') ? (
                               <span>{msg.text}</span>
                             ) : (
                               <>
@@ -1693,9 +1747,15 @@ export default function ProfilePage() {
                   }}
                 />
                 {!visitorChatClosed && !isVisitorBlocked && (
-                  <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
-                    <img src="/images/icon-camera.svg" alt="Foto" />
-                  </a>
+                  profileData?.allowPhotos === false ? (
+                    <span className="camera-disabled" title={`${displayName} wil geen foto's ontvangen.`}>
+                      <img src="/images/icon-camera.svg" alt="Foto" style={{ opacity: 0.35, cursor: 'not-allowed' }} />
+                    </span>
+                  ) : (
+                    <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
+                      <img src="/images/icon-camera.svg" alt="Foto" />
+                    </a>
+                  )
                 )}
                 {user && !isOwnProfile && !visitorChatClosed && (
                   <a className="input-eye" onClick={() => setRevealIdentity(!revealIdentity)} style={{ cursor: 'pointer' }} title={revealIdentity ? "Verberg identiteit" : "Toon identiteit"}>
@@ -1727,17 +1787,19 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* ═══════ PROMOTE BAR ═══════ */}
-          <div className="promote-bar">
-            <span>TOON JE PROFIEL BOVENAAN DE ONLINE LIJST</span>
-            <a
-              className="promote-btn"
-              onClick={() => showToastMsg('Dienst binnenkort beschikbaar.')}
-              style={{ cursor: 'pointer' }}
-            >
-              ✔ NU ACTIVEREN
-            </a>
-          </div>
+          {/* ═══════ PROMOTE BAR (owner only) ═══════ */}
+          {isOwnProfile && (
+            <div className="promote-bar">
+              <span>TOON JE PROFIEL BOVENAAN DE ONLINE LIJST</span>
+              <a
+                className="promote-btn"
+                onClick={() => showToastMsg('Dienst binnenkort beschikbaar.')}
+                style={{ cursor: 'pointer' }}
+              >
+                ✔ NU ACTIVEREN
+              </a>
+            </div>
+          )}
 
           {/* ═══════ ONLINE USERS BOX ═══════ */}
           <div className="online_box">
@@ -1849,6 +1911,23 @@ export default function ProfilePage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Photo Alert Modal (uyari.png) */}
+      {showPhotoAlert && (
+        <div className="block-confirm-overlay" onClick={() => setShowPhotoAlert(false)}>
+          <div className="block-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="block-confirm-header">
+              <span className="block-confirm-site">veilo.nl</span>
+            </div>
+            <div className="block-confirm-content">
+              <p>Je kunt nu geen foto sturen.</p>
+              <div className="block-confirm-buttons">
+                <button className="block-confirm-yes" onClick={() => setShowPhotoAlert(false)}>Oké</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

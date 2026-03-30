@@ -701,6 +701,31 @@
   background: #1e8aaa;
 }
 
+/* --- Conversation count label in about box --- */
+.conv-count-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: #555;
+}
+
+/* --- Camera disabled wrapper --- */
+.camera-disabled {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  position: relative;
+}
+
+/* --- Settings success banner inside modal --- */
+.settings-success-inner {
+  background: #fef9c3;
+  color: #555;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e9df99;
+  font-weight: 500;
+}
+
 /* --- Remove chat message separators for Ribony style --- */
 .chat-msg {
   font-size: 13px;
@@ -708,6 +733,12 @@
   padding: 4px 6px;
   line-height: 1.6;
   border-bottom: none; /* Remove separator */
+}
+
+.chat-msg.user-left {
+  color: #c0392b;
+  font-style: normal;
+  padding: 4px 6px;
 }
 
 .chat-msg strong {
