@@ -11,6 +11,7 @@ export interface ChatMsg {
   id: string;
   sender: string;
   senderUid: string | null;
+  recipientUid?: string | null;
   text: string;
   photoUrl?: string;
   time: string;

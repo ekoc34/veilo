@@ -467,6 +467,7 @@ export default function ProfilePage() {
             id: d.id,
             sender: data.sender || 'Anoniem',
             senderUid: data.senderUid || null,
+            recipientUid: data.recipientUid || null,
             text: data.text || '',
             photoUrl: data.photoUrl || undefined,
             time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
@@ -476,10 +477,10 @@ export default function ProfilePage() {
         .filter((msg) => msg.createdAt > sessionStart)
         .filter((msg) => {
           const myId = user?.uid || anonId;
-          // Show: my own messages, owner's messages directed at me or broadcast
+          // Show: my own messages, OR owner's replies specifically addressed to me
           return (
             msg.senderUid === myId ||
-            (msg.senderUid !== myId && ((msg as any).recipientUid === myId || !(msg as any).recipientUid))
+            (msg.senderUid === chatId && msg.recipientUid === myId)
           );
         });
       setMessages(newMsgs);
@@ -530,6 +531,7 @@ export default function ProfilePage() {
           id: d.id,
           sender: senderName,
           senderUid: data.senderUid || null,
+          recipientUid: data.recipientUid || null,
           text: data.text || '',
           photoUrl: data.photoUrl || undefined,
           time: `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`,
@@ -799,12 +801,18 @@ export default function ProfilePage() {
         await uploadBytes(storageReference, file);
         const downloadURL = await getDownloadURL(storageReference);
         
-        // Update profile in Firestore (updateDoc is more reliable for existing documents)
         if (user) {
-          await updateDoc(doc(db, 'users', user.uid), {
-            profileImg: downloadURL,
-            updatedAt: serverTimestamp()
-          });
+          try {
+            await updateDoc(doc(db, 'users', user.uid), {
+              profileImg: downloadURL,
+              updatedAt: serverTimestamp()
+            });
+          } catch {
+            await setDoc(doc(db, 'users', user.uid), {
+              profileImg: downloadURL,
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+          }
         }
 
         // Update local state for immediate feedback
@@ -1087,11 +1095,12 @@ export default function ProfilePage() {
     <li key={u.username || i} className="online-item">
       <Link href={`/${u.username}`}>
         <img src={u.img} alt={u.alt} />
-        <div className="online-tooltip">
-          <strong>{u.displayName}</strong>
-          {u.bio && <p>{u.bio}</p>}
-        </div>
       </Link>
+      <div className="online-tooltip">
+        <strong>{u.displayName || u.username}</strong>
+        {u.bio && <p>{u.bio}</p>}
+        {u.city && <p style={{ color: '#aaa', fontSize: 11 }}>{u.city}</p>}
+      </div>
     </li>
   ));
 
@@ -1515,7 +1524,7 @@ export default function ProfilePage() {
               <h4>Volgers</h4>
               <h5>{followers}</h5>
             </div>
-            {!isOwnProfile && user && (
+            {!isOwnProfile && user && profileData && (
               <button onClick={handleFollow} className={`follow-btn${isFollowing ? ' following' : ''}`}>
                 {isFollowing ? 'Ontvolgen' : 'Volgen'}
               </button>
@@ -1574,6 +1583,13 @@ export default function ProfilePage() {
                 );
               })()}
               
+              {/* Block link above input */}
+              {activeConversation && (
+                <a className="chat-block-above" onClick={() => showBlockConfirmation(activeConversation)}>
+                  Blokkeer deze anonieme
+                </a>
+              )}
+
               {/* Input box */}
               <div className="input_box">
                 <input
@@ -1599,11 +1615,6 @@ export default function ProfilePage() {
                 <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
                   <img src="/images/icon-camera.svg" alt="Foto" />
                 </a>
-                {activeConversation && (
-                  <a className="input-block" onClick={() => showBlockConfirmation(activeConversation)} style={{ cursor: 'pointer' }} title="Blokkeer gebruiker">
-                    <img src="/images/icon-block.svg" alt="Blokkeer" />
-                  </a>
-                )}
               </div>
 
               <div className="boxed_chat_top">
@@ -1618,7 +1629,7 @@ export default function ProfilePage() {
                     // Show: 1) Messages FROM the anonymous user, 2) Messages TO the anonymous user (owner's replies)
                     const activeMsgs = messages.filter(m => 
                       m.senderUid === activeConversation || 
-                      (m as any).recipientUid === activeConversation
+                      m.recipientUid === activeConversation
                     );
                     return activeMsgs.length === 0 ? (
                       <div className="empty-chat">
@@ -1634,7 +1645,7 @@ export default function ProfilePage() {
                               <span>{msg.text}</span>
                             ) : (
                               <>
-                                <strong>{msg.sender}</strong>:{' '}
+                                <strong style={{ color: msg.senderUid === user?.uid ? '#28A0C8' : '#333' }}>{msg.sender}</strong>:{' '}
                                 {msg.photoUrl ? (
                                   <img src={msg.photoUrl} alt="foto" style={{ maxWidth: 200, display: 'block', marginTop: 4, borderRadius: 3 }} />
                                 ) : msg.text}
@@ -1644,12 +1655,6 @@ export default function ProfilePage() {
                             )}
                           </div>
                         ))}
-                        {/* Block button at bottom */}
-                        <div className="chat-block-bottom">
-                          <a className="chat-block-btn" onClick={() => showBlockConfirmation(activeConversation)}>
-                            Blokkeer deze anonieme
-                          </a>
-                        </div>
                       </>
                     );
                   })()
@@ -1711,26 +1716,13 @@ export default function ProfilePage() {
               <div className="message_box">
                 {[...messages].reverse().map((msg) => (
                   <div key={msg.id} className="chat-msg">
-                    <strong>{msg.sender}</strong>:{' '}
+                    <strong style={{ color: msg.senderUid === profileData?.uid ? '#28A0C8' : '#333' }}>{msg.sender}</strong>:{' '}
                     {msg.photoUrl ? (
                       <img src={msg.photoUrl} alt="foto" style={{ maxWidth: 200, display: 'block', marginTop: 4, borderRadius: 3 }} />
                     ) : msg.text}
                     <span>{msg.time}</span>
                   </div>
                 ))}
-              </div>
-
-              {/* ═══════ SHARE BAR ═══════ */}
-              <div className="share-bar">
-                <div className="share-bar-text">
-                  <p>Sluit deze pagina niet, je bent online. Mensen kunnen je berichten sturen.</p>
-                  <p>Deel je profiel met vrienden: <a href={`/${username}`} target="_blank">{typeof window !== 'undefined' ? `${window.location.origin}/${username}` : `veilo.com/${username}`}</a></p>
-                </div>
-                <div className="share-bar-icons">
-                  <a className="share-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Facebook">f</a>
-                  <a className="share-x" href={`https://twitter.com/intent/tweet?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="X">𝕏</a>
-                  <a className="share-google" href={`https://api.whatsapp.com/send?text=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{ display:'inline-flex', alignItems:'center', justifyContent:'center' }}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>
-                </div>
               </div>
             </div>
           )}
@@ -1863,18 +1855,16 @@ export default function ProfilePage() {
 
       {/* Block Confirmation Dialog */}
       {showBlockConfirm && (
-        <div className="block-confirm-overlay">
-          <div className="block-confirm-dialog">
+        <div className="block-confirm-overlay" onClick={cancelBlock}>
+          <div className="block-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="block-confirm-header">
+              <span className="block-confirm-site">veilo.nl</span>
+            </div>
             <div className="block-confirm-content">
-              <h3>Blokkeer anonieme gebruiker</h3>
-              <p>Als je deze anonieme gebruiker blokkeert, kan deze gebruiker je niet meer schrijven. Weet je het zeker?</p>
+              <p>Als je deze anonieme blokkeert, kan hij je niet meer schrijven. Weet je het zeker?</p>
               <div className="block-confirm-buttons">
-                <button className="block-confirm-yes" onClick={() => confirmBlock(showBlockConfirm)}>
-                  Ja, blokkeer
-                </button>
-                <button className="block-confirm-no" onClick={cancelBlock}>
-                  Annuleer
-                </button>
+                <button className="block-confirm-no" onClick={cancelBlock}>Annuleer</button>
+                <button className="block-confirm-yes" onClick={() => confirmBlock(showBlockConfirm)}>Oké</button>
               </div>
             </div>
           </div>
