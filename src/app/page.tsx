@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signInWithPopup, FacebookAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import './home.css';
@@ -290,6 +290,22 @@ export default function HomePage() {
     }
   }
 
+  async function handleContactSubmit() {
+    if (!contactName.trim() || !contactEmail.trim() || !contactMessage.trim()) return;
+    try {
+      await addDoc(collection(db, 'contacts'), {
+        name: contactName,
+        username: contactUsername || '',
+        email: contactEmail,
+        message: contactMessage,
+        createdAt: serverTimestamp()
+      });
+      setContactSent(true);
+    } catch {
+      setContactSent(true);
+    }
+  }
+
   function handleSearch() {
     if (searchQuery.trim()) {
       setSearchActive(true);
@@ -408,7 +424,7 @@ export default function HomePage() {
 
           {/* Popular user card */}
           <div className="home_pop">
-            <Link href="/populair" target="_blank">
+            <a onClick={() => { setSearchQuery(''); setSearchActive(false); }} style={{ cursor: 'pointer' }}>
               <img
                 src="/images/default-avatar.svg"
                 alt="Populaire gebruiker profielfoto"
@@ -417,10 +433,10 @@ export default function HomePage() {
                 <strong>POPULAIR</strong>
                 <h3>Gebruiker</h3>
                 <p>
-                  Vandaag <b>0</b> Veils
+                  Vandaag <b>{onlineUsers.length}</b> Online
                 </p>
               </div>
-            </Link>
+            </a>
           </div>
 
           {/* User grid */}
@@ -625,7 +641,7 @@ export default function HomePage() {
                 />
                 <button
                   className="modal-submit"
-                  onClick={() => { if (contactName.trim() && contactEmail.trim() && contactMessage.trim()) setContactSent(true); }}
+                  onClick={handleContactSubmit}
                 >
                   Verstuur
                 </button>

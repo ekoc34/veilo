@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase';
+import { auth, db, storage } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from '@/context/AuthContext';
 import { Conversation, ChatMsg, getAnonId, generateAnonName } from '@/lib/chat';
 import './profile.css';
@@ -91,6 +92,14 @@ export default function ProfilePage() {
   const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
   const [showProfilePicChange, setShowProfilePicChange] = useState(false);
   const [selectedProfilePic, setSelectedProfilePic] = useState<string | null>(null);
+  const [popularUsers, setPopularUsers] = useState<any[]>([]);
+  const [followingList, setFollowingList] = useState<any[]>([]);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
+  const [promoteSuccess, setPromoteSuccess] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactUsername, setContactUsername] = useState('');
@@ -216,6 +225,77 @@ export default function ProfilePage() {
     }));
     setFilteredOnlineUsers(filtered);
   }, [searchCity, onlineUsers, allUsers]);
+
+  /* Load popular users by total veil count */
+  useEffect(() => {
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snap) => {
+      const usersData = snap.docs.map(d => ({ uid: d.id, ...(d.data() as any) }));
+      const sorted = usersData
+        .map(u => ({
+          ...u,
+          totalVeils: (u.veil1 || 0) + (u.veil2 || 0) + (u.veil3 || 0) + (u.veil4 || 0)
+        }))
+        .filter(u => u.totalVeils > 0)
+        .sort((a, b) => b.totalVeils - a.totalVeils)
+        .slice(0, 20);
+      setPopularUsers(sorted);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  /* Load following list for own profile */
+  useEffect(() => {
+    if (!user || !isOwnProfile) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, async (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const followingUids: string[] = data.following || [];
+        if (followingUids.length === 0) { setFollowingList([]); return; }
+        const followedUsers = await Promise.all(
+          followingUids.map(async (uid) => {
+            const uDoc = await getDoc(doc(db, 'users', uid));
+            if (uDoc.exists()) {
+              const d = uDoc.data();
+              return { uid, displayName: d.displayName || d.name || d.username || uid, username: d.username || '', profileImg: d.profileImg || '/images/default-avatar.svg' };
+            }
+            return null;
+          })
+        );
+        setFollowingList(followedUsers.filter(Boolean) as any[]);
+      }
+    });
+    return () => unsubscribe();
+  }, [user, isOwnProfile]);
+
+  /* Load isFollowing status for visitors */
+  useEffect(() => {
+    if (!user || isOwnProfile || !profileData?.uid) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const following: string[] = data.following || [];
+        setIsFollowing(following.includes(profileData.uid));
+      }
+    });
+    return () => unsubscribe();
+  }, [user, isOwnProfile, profileData?.uid]);
+
+  /* Load persisted settings (showOnlineList, allowPhotos) for own profile */
+  useEffect(() => {
+    if (!user || !isOwnProfile) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.showInOnlineList !== undefined) setShowOnlineList(data.showInOnlineList);
+        if (data.allowPhotos !== undefined) setAllowPhotos(data.allowPhotos);
+      }
+    });
+    return () => unsubscribe();
+  }, [user, isOwnProfile]);
 
   /* Load blocked users for logged-in profile owner */
   useEffect(() => {
@@ -656,15 +736,22 @@ export default function ProfilePage() {
   async function handleContactSubmit(e: React.FormEvent) {
     e.preventDefault();
     setContactError('');
-
     if (!contactName.trim() || !contactEmail.trim() || !contactMessage.trim()) {
       setContactError('Alle velden zijn verplicht.');
       return;
     }
-
-    // Simulate sending
-    setContactSent(true);
-    // Reset after some time or on close
+    try {
+      await addDoc(collection(db, 'contacts'), {
+        name: contactName,
+        username: contactUsername || '',
+        email: contactEmail,
+        message: contactMessage,
+        createdAt: serverTimestamp()
+      });
+      setContactSent(true);
+    } catch (err) {
+      setContactError('Er is een fout opgetreden. Probeer het opnieuw.');
+    }
   }
 
   async function handleSettingsUpdate() {
@@ -731,7 +818,7 @@ export default function ProfilePage() {
         blockedUsers: []
       });
       setBlockedSenders(new Set());
-      alert('Alle blokkades zijn verwijderd.');
+      showToastMsg('Alle blokkades zijn verwijderd.');
     } catch (error) {
       console.error('Error clearing blocks:', error);
     }
@@ -740,11 +827,61 @@ export default function ProfilePage() {
   async function handlePasswordReset() {
     if (!user?.email) return;
     try {
-      // In a real app, you'd use Firebase sendPasswordResetEmail
-      // For now, we'll simulate the success
-      alert(`Er is een e-mail gestuurd naar ${user.email} om je wachtwoord te herstellen.`);
+      await sendPasswordResetEmail(auth, user.email);
+      setSettingsUpdated(true);
+      setTimeout(() => setSettingsUpdated(false), 3000);
     } catch (error) {
       console.error('Error sending password reset:', error);
+    }
+  }
+
+  function showToastMsg(msg: string) {
+    setToastMessage(msg);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  }
+
+  async function handleFollow() {
+    if (!user || !profileData?.uid || isOwnProfile) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const profileRef = doc(db, 'users', profileData.uid);
+      if (isFollowing) {
+        await updateDoc(userRef, { following: arrayRemove(profileData.uid) });
+        await updateDoc(profileRef, { followers: increment(-1) });
+        setIsFollowing(false);
+      } else {
+        await updateDoc(userRef, { following: arrayUnion(profileData.uid) });
+        await updateDoc(profileRef, { followers: increment(1) });
+        setIsFollowing(true);
+      }
+    } catch (error) {
+      console.error('Error toggling follow:', error);
+    }
+  }
+
+  async function handlePhotoSend(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !profileData?.uid) return;
+    try {
+      const storagePath = `chat-photos/${profileData.uid}_${Date.now()}`;
+      const storageReference = storageRef(storage, storagePath);
+      await uploadBytes(storageReference, file);
+      const downloadURL = await getDownloadURL(storageReference);
+      const anonId = getAnonId();
+      const senderName = isOwnProfile
+        ? (myProfile?.username || 'Eigenaar')
+        : (user && revealIdentity ? (myProfile?.name || username) : generateAnonName());
+      await addDoc(collection(db, 'chats', profileData.uid, 'messages'), {
+        sender: senderName,
+        senderUid: isOwnProfile ? user?.uid : (user?.uid || anonId),
+        text: `[Foto]`,
+        photoUrl: downloadURL,
+        createdAt: serverTimestamp(),
+      });
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    } catch (error) {
+      console.error('Error sending photo:', error);
     }
   }
 
@@ -868,6 +1005,11 @@ export default function ProfilePage() {
         Instellingen zijn succesvol bijgewerkt.
       </div>
 
+      {/* Toast Notification */}
+      <div className={`settings-success-scroll ${showToast ? 'visible' : ''}`}>
+        {toastMessage}
+      </div>
+
       {/* ═══════ HEADER ═══════ */}
       <div className="prof-header">
         <div className="prof-container">
@@ -887,7 +1029,7 @@ export default function ProfilePage() {
                       <div className="nav-hint-item">
                         <span>Toon in online lijst</span>
                         <label className="toggle-switch">
-                          <input type="checkbox" checked={showOnlineList} onChange={(e) => setShowOnlineList(e.target.checked)} />
+                          <input type="checkbox" checked={showOnlineList} onChange={async (e) => { const val = e.target.checked; setShowOnlineList(val); if (user) await updateDoc(doc(db, 'users', user.uid), { showInOnlineList: val }); }} />
                           <span className="toggle-slider"></span>
                           <span className="toggle-label">{showOnlineList ? 'Aan' : 'Uit'}</span>
                         </label>
@@ -895,7 +1037,7 @@ export default function ProfilePage() {
                       <div className="nav-hint-item">
                         <span>{"Foto's mogen naar mij worden gestuurd"}</span>
                         <label className="toggle-switch">
-                          <input type="checkbox" checked={allowPhotos} onChange={(e) => setAllowPhotos(e.target.checked)} />
+                          <input type="checkbox" checked={allowPhotos} onChange={async (e) => { const val = e.target.checked; setAllowPhotos(val); if (user) await updateDoc(doc(db, 'users', user.uid), { allowPhotos: val }); }} />
                           <span className="toggle-slider"></span>
                           <span className="toggle-label">{allowPhotos ? 'Aan' : 'Uit'}</span>
                         </label>
@@ -934,7 +1076,7 @@ export default function ProfilePage() {
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="nav-btn nav-groups">
+                  <a className="nav-btn nav-groups" onClick={() => showToastMsg('Groepen zijn binnenkort beschikbaar.')} style={{ cursor: 'pointer' }}>
                     <img src="/images/icon-groups.svg" alt="" />
                     Groepen
                   </a>
@@ -964,13 +1106,30 @@ export default function ProfilePage() {
                 <span>Veils van vandaag</span>
               </div>
               <div className="modal-popular-list">
-                <div className="modal-popular-empty">
-                  <img src="/images/default-avatar.svg" alt="" />
-                  <p>Je staat nog niet in de top 100 van de veillijst.</p>
-                </div>
+                {popularUsers.length === 0 ? (
+                  <div className="modal-popular-empty">
+                    <img src="/images/default-avatar.svg" alt="" />
+                    <p>Nog geen gebruikers in de top lijst.</p>
+                  </div>
+                ) : (
+                  <ul>
+                    {popularUsers.map((u, i) => (
+                      <li key={u.uid} className="modal-popular-item">
+                        <span className="modal-popular-rank">{i + 1}</span>
+                        <Link href={`/${u.username}`} onClick={() => setShowPopular(false)}>
+                          <img src={u.profileImg || '/images/default-avatar.svg'} alt="" />
+                          <div>
+                            <strong>{u.displayName || u.name || u.username}</strong>
+                            <span>{u.totalVeils} Veils</span>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="modal-popular-cta">
-                <a href="#">PRAAT MET MEER MENSEN</a>
+                <a href={`/${username}`} onClick={() => setShowPopular(false)}>PRAAT MET MEER MENSEN</a>
               </div>
             </div>
           </div>
@@ -985,15 +1144,43 @@ export default function ProfilePage() {
               <img src="/images/icon-messages.svg" alt="" className="modal-messages-icon" />
               <h2>Berichten</h2>
               <div className="modal-messages-actions">
-                <a onClick={() => {}} style={{ cursor: 'pointer' }}>Alles selecteren</a>
-                <a onClick={() => {}} style={{ cursor: 'pointer' }}>Selectie verwijderen</a>
+                <a onClick={() => setSelectedConversations(new Set(conversations.map(c => c.id)))} style={{ cursor: 'pointer' }}>Alles selecteren</a>
+                <a onClick={async () => {
+                  if (selectedConversations.size === 0 || !profileData?.uid) return;
+                  for (const convId of selectedConversations) {
+                    await deleteDoc(doc(db, 'users', profileData.uid, 'conversations', convId));
+                  }
+                  setSelectedConversations(new Set());
+                }} style={{ cursor: 'pointer' }}>Selectie verwijderen</a>
               </div>
               <a className="modal-close" onClick={() => setShowMessages(false)}>✕</a>
             </div>
             <div className="modal-messages-body">
-              <div className="modal-messages-empty">
-                Geen berichten.
-              </div>
+              {conversations.length === 0 ? (
+                <div className="modal-messages-empty">
+                  Geen berichten.
+                </div>
+              ) : (
+                <ul>
+                  {conversations.map(conv => (
+                    <li
+                      key={conv.id}
+                      className={`modal-messages-item${selectedConversations.has(conv.id) ? ' selected' : ''}`}
+                      onClick={() => setSelectedConversations(prev => {
+                        const next = new Set(prev);
+                        if (next.has(conv.id)) next.delete(conv.id); else next.add(conv.id);
+                        return next;
+                      })}
+                    >
+                      <img src="/images/default-avatar.svg" alt="" />
+                      <div>
+                        <strong>{conv.anonName || 'Anoniem'}</strong>
+                      </div>
+                      {selectedConversations.has(conv.id) && <span className="modal-messages-check">✔</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>
@@ -1016,7 +1203,7 @@ export default function ProfilePage() {
             </div>
             {settingsUpdated && (
               <div className="settings-success-inner">
-                Ayarların Başarıyla Güncellendi.
+                Instellingen zijn succesvol bijgewerkt.
               </div>
             )}
             <div className="modal-settings-body">
@@ -1146,6 +1333,25 @@ export default function ProfilePage() {
               <a className="modal-close" onClick={() => setShowFollowing(false)}>✕</a>
             </div>
             <div className="modal-following-body">
+              {followingList.length === 0 ? (
+                <div className="modal-following-empty">Je volgt nog niemand.</div>
+              ) : (
+                <ul>
+                  {followingList.map((u: any) => (
+                    <li key={u.uid} className="modal-following-item">
+                      <Link href={`/${u.username}`} onClick={() => setShowFollowing(false)}>
+                        <img src={u.profileImg || '/images/default-avatar.svg'} alt="" />
+                        <strong>{u.displayName || u.username}</strong>
+                      </Link>
+                      <a className="modal-following-unfollow" onClick={async () => {
+                        if (!user) return;
+                        await updateDoc(doc(db, 'users', user.uid), { following: arrayRemove(u.uid) });
+                        await updateDoc(doc(db, 'users', u.uid), { followers: increment(-1) });
+                      }} style={{ cursor: 'pointer' }}>Ontvolgen</a>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>
@@ -1199,11 +1405,23 @@ export default function ProfilePage() {
             onChange={handleProfilePicChange}
             style={{ display: 'none' }}
           />
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoSend}
+            style={{ display: 'none' }}
+          />
           <div className="left_follow_box">
             <div>
               <h4>Volgers</h4>
               <h5>{followers}</h5>
             </div>
+            {!isOwnProfile && user && (
+              <button onClick={handleFollow} className={`follow-btn${isFollowing ? ' following' : ''}`}>
+                {isFollowing ? 'Ontvolgen' : 'Volgen'}
+              </button>
+            )}
           </div>
 
           {/* Veils */}
@@ -1279,7 +1497,7 @@ export default function ProfilePage() {
                     }
                   }}
                 />
-                <a className="input-camera" style={{ cursor: 'pointer' }}>
+                <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
                   <img src="/images/icon-camera.svg" alt="Foto" />
                 </a>
                 {activeConversation && (
@@ -1345,7 +1563,7 @@ export default function ProfilePage() {
                 <div className="share-bar-icons">
                   <a className="share-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Facebook">f</a>
                   <a className="share-x" href={`https://twitter.com/intent/tweet?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="X">𝕏</a>
-                  <a className="share-google" href={`https://plus.google.com/share?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Google">G</a>
+                  <a className="share-google" href={`https://api.whatsapp.com/send?text=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">W</a>
                 </div>
               </div>
             </div>
@@ -1366,7 +1584,7 @@ export default function ProfilePage() {
                     }
                   }}
                 />
-                <a className="input-camera" style={{ cursor: 'pointer' }}>
+                <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
                   <img src="/images/icon-camera.svg" alt="Foto" />
                 </a>
                 {user && !isOwnProfile && (
@@ -1406,7 +1624,7 @@ export default function ProfilePage() {
                 <div className="share-bar-icons">
                   <a className="share-fb" href={`https://www.facebook.com/sharer/sharer.php?u=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Facebook">f</a>
                   <a className="share-x" href={`https://twitter.com/intent/tweet?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="X">𝕏</a>
-                  <a className="share-google" href={`https://plus.google.com/share?url=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="Google">G</a>
+                  <a className="share-google" href={`https://api.whatsapp.com/send?text=${typeof window !== 'undefined' ? encodeURIComponent(window.location.href) : ''}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">W</a>
                 </div>
               </div>
             </div>
@@ -1420,17 +1638,15 @@ export default function ProfilePage() {
               onClick={() => {
                 if (isOwnProfile && user) {
                   updateDoc(doc(db, 'users', user.uid), {
-                    lastSeen: serverTimestamp(), // Update lastSeen to "bump" the profile
+                    lastSeen: serverTimestamp(),
                     isPromoted: true,
                     updatedAt: serverTimestamp()
-                  }).then(() => alert('Je profiel staat nu bovenaan de lijst!'));
-                } else {
-                  alert('Deze functie is alleen voor de profieleigenaar.');
+                  }).then(() => { setPromoteSuccess(true); setTimeout(() => setPromoteSuccess(false), 3000); });
                 }
               }}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: isOwnProfile ? 'pointer' : 'default' }}
             >
-              ✔ NU ACTIVEREN
+              {promoteSuccess ? '✔ GEACTIVEERD!' : '✔ NU ACTIVEREN'}
             </a>
           </div>
 
@@ -1537,9 +1753,10 @@ export default function ProfilePage() {
                   onChange={(e) => setContactMessage(e.target.value)}
                   rows={4}
                 />
+                {contactError && <p style={{ color: '#D35757', fontSize: 12, marginBottom: 8 }}>{contactError}</p>}
                 <button
                   className="modal-submit"
-                  onClick={() => { if (contactName.trim() && contactEmail.trim() && contactMessage.trim()) setContactSent(true); }}
+                  onClick={(e) => handleContactSubmit(e as any)}
                 >
                   Verstuur
                 </button>
