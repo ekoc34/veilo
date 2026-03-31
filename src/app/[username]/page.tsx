@@ -411,10 +411,6 @@ export default function ProfilePage() {
               totalConversations: docData.totalConversations || 0,
               welcomeSeen: docData.welcomeSeen !== false,
             });
-            // Show welcome modal once for the profile owner
-            if (docData.welcomeSeen === false && user?.uid === snap.docs[0].id) {
-              setShowWelcome(true);
-            }
             setProfileNotFound(false);
           } else {
             setProfileNotFound(true);
@@ -596,6 +592,12 @@ export default function ProfilePage() {
     });
     return () => unsubscribe();
   }, [isOwnProfile, profileData?.uid, user?.uid]);
+
+  useEffect(() => {
+    if (user && profileData?.welcomeSeen === false && user.uid === profileData?.uid) {
+      setShowWelcome(true);
+    }
+  }, [user?.uid, profileData?.welcomeSeen, profileData?.uid]);
 
   /* Sync refs used in cleanup */
   useEffect(() => { if (profileData?.uid) profileUidRef.current = profileData.uid; }, [profileData?.uid]);
