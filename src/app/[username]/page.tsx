@@ -92,7 +92,7 @@ export default function ProfilePage() {
   const [blockedSenders, setBlockedSenders] = useState<Set<string>>(new Set());
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
-  const [userLastActivity, setUserLastActivity] = useState<Map<string, number>>(new Map());
+
   const [showProfilePicChange, setShowProfilePicChange] = useState(false);
   const [selectedProfilePic, setSelectedProfilePic] = useState<string | null>(null);
   const [popularUsers, setPopularUsers] = useState<any[]>([]);
@@ -111,7 +111,12 @@ export default function ProfilePage() {
   const [showContact, setShowContact] = useState(false);
   const [contactName, setContactName] = useState('');
   const [showPhotoAlert, setShowPhotoAlert] = useState(false);
+  const [showRevealConfirm, setShowRevealConfirm] = useState(false);
   const prevMsgCountRef = useRef<number>(0);
+  const tabBlinkRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const profileUidRef = useRef<string | null>(null);
+  const hasSentMsgRef = useRef(false);
+  const revealIdentityRef = useRef(false);
   const [contactUsername, setContactUsername] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
@@ -564,42 +569,8 @@ export default function ProfilePage() {
         return true;
       });
       
-      // Update user activity tracking
-      const newActivityMap = new Map<string, number>();
-      sessionMsgs.forEach(msg => {
-        if (msg.senderUid && msg.senderUid !== user?.uid) {
-          newActivityMap.set(msg.senderUid, msg.createdAt.getTime());
-        }
-      });
-      setUserLastActivity(newActivityMap);
-      
-      // Check for users who left (inactive for 5+ minutes)
-      const INACTIVE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
-      const currentTime = Date.now();
-      
-      const leftUsers = [...newActivityMap.entries()] 
-        .filter(([_, lastActivity]) => currentTime - lastActivity > INACTIVE_THRESHOLD)
-        .map(([uid, _]) => uid);
-      
-      // Add "left conversation" messages
-      const leftMsgs = leftUsers.map(sender => {
-        const senderMsgs = allMsgs.filter(m => m.senderUid === sender);
-        const senderName = senderMsgs[0]?.sender || 'Anoniem';
-        const isAnonymous = senderName.startsWith('Anony-');
-        const leftText = `${senderName} heeft de chat verlaten`;
-        
-        return {
-          id: `left-${sender}`,
-          sender: '',
-          senderUid: sender,
-          text: leftText,
-          time: '',
-          createdAt: new Date(),
-        } as ChatMsg;
-      });
-      
-      // Combine regular messages with left messages
-      const finalMsgs = [...sessionMsgs, ...leftMsgs].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      // Left-chat messages now come from Firestore (written on visitor unmount)
+      const finalMsgs = [...sessionMsgs].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
       
       setMessages(finalMsgs);
       
@@ -618,19 +589,26 @@ export default function ProfilePage() {
     return () => unsubscribe();
   }, [isOwnProfile, profileData?.uid, user?.uid]);
 
+  /* Sync refs used in cleanup */
+  useEffect(() => { if (profileData?.uid) profileUidRef.current = profileData.uid; }, [profileData?.uid]);
+  useEffect(() => { revealIdentityRef.current = revealIdentity; }, [revealIdentity]);
+
   /* Clear everything on page refresh - fresh start */
   useEffect(() => {
     setMessages([]);
     setActiveConversation(null);
-    // Don't clear profile data - it should persist
   }, []);
 
-  /* Tab notification + sound on new message (owner only) */
+  /* Tab notification + sound on new message (all users) */
   useEffect(() => {
-    if (!isOwnProfile) return;
-    const incomingCount = messages.filter(m => m.senderUid !== user?.uid && !m.text.includes('heeft de chat verlaten')).length;
+    const incomingCount = messages.filter(m => {
+      if (m.text.includes('heeft de chat verlaten')) return false;
+      return isOwnProfile ? m.senderUid !== user?.uid : m.senderUid === profileData?.uid;
+    }).length;
     if (incomingCount > prevMsgCountRef.current) {
-      document.title = 'Nieuw bericht! | Veilo';
+      if (tabBlinkRef.current) clearInterval(tabBlinkRef.current);
+      let alt = false;
+      tabBlinkRef.current = setInterval(() => { document.title = alt ? 'Veilo | Anoniem Chat' : 'Nieuw bericht! | Veilo'; alt = !alt; }, 1000);
       if (soundOn) {
         try {
           const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -649,14 +627,33 @@ export default function ProfilePage() {
     prevMsgCountRef.current = incomingCount;
   }, [messages, isOwnProfile, soundOn]);
 
-  /* Restore tab title when user focuses the tab */
+  /* Restore tab title + clear blink when user opens the tab */
   useEffect(() => {
     const handleVisibility = () => {
-      if (!document.hidden) document.title = 'Veilo';
+      if (!document.hidden) {
+        if (tabBlinkRef.current) { clearInterval(tabBlinkRef.current); tabBlinkRef.current = null; }
+        document.title = 'Veilo';
+      }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
+
+  /* Visitor: write "heeft de chat verlaten" on unmount (only if they sent ≥1 message) */
+  useEffect(() => {
+    if (isOwnProfile) return;
+    return () => {
+      if (!profileUidRef.current || !hasSentMsgRef.current) return;
+      const anonId = getAnonId();
+      addDoc(collection(db, 'chats', profileUidRef.current, 'messages'), {
+        sender: anonId,
+        senderUid: anonId,
+        text: `${anonId} heeft de chat verlaten`,
+        leftChat: true,
+        createdAt: new Date(),
+      }).catch(() => {});
+    };
+  }, [isOwnProfile]);
 
   /* Send message to Firestore */
   async function sendMessage() {
@@ -681,8 +678,9 @@ export default function ProfilePage() {
     if (isVisitorBlocked) { showToastMsg('Je bent geblokkeerd en kunt geen berichten sturen.'); return; }
     if (visitorChatClosed) { showToastMsg('Chat is gesloten.'); return; }
 
-    // Track when visitor first sends a message (for 3-min veil timer)
+    // Track when visitor first sends a message (for 3-min veil timer + left-chat trigger)
     if (!chatStartTime.current) chatStartTime.current = Date.now();
+    hasSentMsgRef.current = true;
 
     const anonId = getAnonId();
     const senderName = user && revealIdentity ? myProfile?.name || username : anonId;
@@ -697,18 +695,6 @@ export default function ProfilePage() {
     } catch { /* silently fail */ }
   }
 
-  /* Visitor closes the chat */
-  async function handleVisitorCloseChat() {
-    if (!profileData?.uid) return;
-    const anonId = getAnonId();
-    const myId = user?.uid || anonId;
-    try {
-      await setDoc(doc(db, 'chats', profileData.uid, 'closed', myId), {
-        closedAt: serverTimestamp(),
-      });
-    } catch { /* silently fail */ }
-    setVisitorChatClosed(true);
-  }
 
   /* Create conversation when visitor sends first message */
   async function ensureConversation(senderName: string, senderUid: string) {
@@ -916,8 +902,6 @@ export default function ProfilePage() {
         updatedAt: serverTimestamp()
       });
       setSettingsUpdated(true);
-      // Auto-hide after 3 seconds
-      setTimeout(() => setSettingsUpdated(false), 3000);
     } catch (error) {
       console.error('Error updating settings:', error);
     }
@@ -931,7 +915,6 @@ export default function ProfilePage() {
         updatedAt: serverTimestamp()
       });
       setSettingsUpdated(true);
-      setTimeout(() => setSettingsUpdated(false), 3000);
     } catch (error) {
       console.error('Error updating design settings:', error);
     }
@@ -946,7 +929,6 @@ export default function ProfilePage() {
         updatedAt: serverTimestamp()
       });
       setSettingsUpdated(true);
-      setTimeout(() => setSettingsUpdated(false), 3000);
     } catch (error) {
       console.error('Error updating privacy settings:', error);
     }
@@ -970,7 +952,6 @@ export default function ProfilePage() {
     try {
       await sendPasswordResetEmail(auth, user.email);
       setSettingsUpdated(true);
-      setTimeout(() => setSettingsUpdated(false), 3000);
     } catch (error) {
       console.error('Error sending password reset:', error);
     }
@@ -1347,12 +1328,12 @@ export default function ProfilePage() {
 
       {/* ═══════ INSTELLINGEN MODAL ═══════ */}
       {showSettings && (
-        <div className="modal-overlay" onClick={() => setShowSettings(false)}>
+        <div className="modal-overlay" onClick={() => { setShowSettings(false); setSettingsUpdated(false); }}>
           <div className="modal-settings" onClick={(e) => e.stopPropagation()}>
             <div className="modal-settings-head">
               <img src="/images/icon-settings.svg" alt="" className="modal-settings-icon" />
               <h2>Instellingen</h2>
-              <a className="modal-close" onClick={() => setShowSettings(false)}>✕</a>
+              <a className="modal-close" onClick={() => { setShowSettings(false); setSettingsUpdated(false); }}>✕</a>
             </div>
             <div className="modal-settings-tabs">
               <a className={settingsTab === 'general' ? 'active' : ''} onClick={() => setSettingsTab('general')}>Algemeen</a>
@@ -1754,8 +1735,12 @@ export default function ProfilePage() {
                     }
                   }}
                 />
-                {!visitorChatClosed && !isVisitorBlocked && (
-                  profileData?.allowPhotos === false ? (
+                {user && !isOwnProfile && (
+                  <a className={`input-eye${revealIdentity?' active':''}`} style={{cursor:'pointer'}} title={revealIdentity?'Zichtbaar':'Toon naam'} onClick={()=>{if(!revealIdentity)setShowRevealConfirm(true);}}>
+                    <img src="/images/icon-eye.svg" alt="Identiteit" />
+                  </a>
+                )}
+                {profileData?.allowPhotos === false ? (
                     <span className="camera-disabled" title={`${displayName} wil geen foto's ontvangen.`}>
                       <img src="/images/icon-camera.svg" alt="Foto" style={{ opacity: 0.35, cursor: 'not-allowed' }} />
                     </span>
@@ -1763,15 +1748,6 @@ export default function ProfilePage() {
                     <a className="input-camera" style={{ cursor: 'pointer' }} onClick={() => photoInputRef.current?.click()}>
                       <img src="/images/icon-camera.svg" alt="Foto" />
                     </a>
-                  )
-                )}
-                {user && !isOwnProfile && !visitorChatClosed && (
-                  <a className="input-eye" onClick={() => setRevealIdentity(!revealIdentity)} style={{ cursor: 'pointer' }} title={revealIdentity ? "Verberg identiteit" : "Toon identiteit"}>
-                    <img src="/images/icon-eye.svg" alt="Identiteit" />
-                  </a>
-                )}
-                {!visitorChatClosed && (
-                  <a style={{ cursor: 'pointer', marginLeft: 6, color: '#999', fontSize: 16, lineHeight: '34px' }} onClick={handleVisitorCloseChat} title="Sluit chat">✕</a>
                 )}
               </div>
 
@@ -1934,6 +1910,24 @@ export default function ProfilePage() {
               <p>Je kunt nu geen foto sturen.</p>
               <div className="block-confirm-buttons">
                 <button className="block-confirm-yes" onClick={() => setShowPhotoAlert(false)}>Oké</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Identity Reveal Confirm Dialog */}
+      {showRevealConfirm && (
+        <div className="block-confirm-overlay" onClick={() => setShowRevealConfirm(false)}>
+          <div className="block-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="block-confirm-header">
+              <span className="block-confirm-site">veilo.nl</span>
+            </div>
+            <div className="block-confirm-content">
+              <p>Vanaf nu zullen je berichten met je gebruikersnaam worden verzonden. Weet je het zeker?</p>
+              <div className="block-confirm-buttons">
+                <button className="block-confirm-no" onClick={() => setShowRevealConfirm(false)}>Annuleer</button>
+                <button className="block-confirm-yes" onClick={() => { setRevealIdentity(true); setShowRevealConfirm(false); }}>Oké</button>
               </div>
             </div>
           </div>
