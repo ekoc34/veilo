@@ -1242,7 +1242,7 @@ export default function ProfilePage() {
             )}
             <li>
               <a className="nav-btn nav-sound" onClick={() => setSoundOn(!soundOn)} style={{ cursor: 'pointer' }} title={soundOn ? 'Geluid uit' : 'Geluid aan'}>
-                <img src={soundOn ? '/images/icon-sound.svg' : '/images/icon-sound-muted.svg'} alt="" />
+                <img src={soundOn ? '/images/icon-sound.svg' : '/images/icon-sound-muted.svg?v=2'} alt="" />
               </a>
             </li>
           </ul>
