@@ -9,6 +9,7 @@ import { auth, db, storage } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from '@/context/AuthContext';
 import { Conversation, ChatMsg, getAnonId, generateAnonName } from '@/lib/chat';
+import WelcomeModal from './WelcomeModal';
 import './profile.css';
 
 /* ──────────────────────────────────────
@@ -41,6 +42,7 @@ interface ProfileData {
   allowPhotos: boolean;
   privacyShowCount?: boolean;
   totalConversations?: number;
+  welcomeSeen?: boolean;
 }
 
 const VEIL_ITEMS = [
@@ -112,6 +114,7 @@ export default function ProfilePage() {
   const [contactName, setContactName] = useState('');
   const [showPhotoAlert, setShowPhotoAlert] = useState(false);
   const [showRevealConfirm, setShowRevealConfirm] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   const prevMsgCountRef = useRef<number>(0);
   const tabBlinkRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const profileUidRef = useRef<string | null>(null);
@@ -406,7 +409,12 @@ export default function ProfilePage() {
               allowPhotos: docData.allowPhotos !== false,
               privacyShowCount: docData.privacyShowCount !== false,
               totalConversations: docData.totalConversations || 0,
+              welcomeSeen: docData.welcomeSeen !== false,
             });
+            // Show welcome modal once for the profile owner
+            if (docData.welcomeSeen === false && user?.uid === snap.docs[0].id) {
+              setShowWelcome(true);
+            }
             setProfileNotFound(false);
           } else {
             setProfileNotFound(true);
@@ -954,6 +962,15 @@ export default function ProfilePage() {
       setSettingsUpdated(true);
     } catch (error) {
       console.error('Error sending password reset:', error);
+    }
+  }
+
+  async function dismissWelcome() {
+    setShowWelcome(false);
+    if (user && profileData?.uid) {
+      try {
+        await updateDoc(doc(db, 'users', profileData.uid), { welcomeSeen: true });
+      } catch { /* silently fail */ }
     }
   }
 
@@ -1915,6 +1932,8 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      {showWelcome && <WelcomeModal username={username} onClose={dismissWelcome} />}
 
       {/* Identity Reveal Confirm Dialog */}
       {showRevealConfirm && (

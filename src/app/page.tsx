@@ -261,6 +261,7 @@ export default function HomePage() {
           username: regUsername,
           email: regEmail,
           createdAt: new Date().toISOString(),
+          welcomeSeen: false,
         });
       } catch (fsErr) {
         console.error('Firestore write error:', fsErr);
