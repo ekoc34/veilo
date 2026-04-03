@@ -1609,20 +1609,26 @@ export default function ProfilePage() {
           </div>
 
           {/* Veils */}
-          {VEIL_ITEMS.map((item, i) => (
-            <div
-              key={i}
-              className="ribbon_terminal"
-              onClick={() => giveVeil(i)}
-              style={{ cursor: 'pointer' }}
-            >
-              <span className={`green ribbon_icon_${i + 1}`}>
-                <img src={item.icon} alt={item.label} />
-              </span>
-              <h4>{item.label}</h4>
-              <h3>{veils[i]}</h3>
+          {isOwnProfile ? (
+            VEIL_ITEMS.map((item, i) => (
+              <div key={i} className="ribbon_terminal" onClick={() => giveVeil(i)} style={{ cursor: 'pointer' }}>
+                <span className={`green ribbon_icon_${i + 1}`}>
+                  <img src={item.icon} alt={item.label} />
+                </span>
+                <h4>{item.label}</h4>
+                <h3>{veils[i]}</h3>
+              </div>
+            ))
+          ) : (
+            <div className="visitor-veils">
+              {VEIL_ITEMS.map((item, i) => (
+                <div key={i} className="visitor-veil-tile" onClick={() => giveVeil(i)}>
+                  <img src={item.icon} alt={item.label} />
+                  <span>{veils[i]}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
 
         {/* ═══════ MAIN CHAT AREA ═══════ */}
