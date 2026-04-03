@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, limit, arrayUnion, arrayRemove, runTransaction } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
@@ -34,6 +34,7 @@ interface ProfileData {
   city: string;
   followers: number;
   lastSeen?: any;
+  isOnline?: boolean;
   profileImg: string;
   themeColor: string;
   veil1: number;
@@ -109,6 +110,8 @@ export default function ProfilePage() {
   const [offlineConvs, setOfflineConvs] = useState<any[]>([]);
   const [activeOffConv, setActiveOffConv] = useState<any>(null);
   const [offReplyText, setOffReplyText] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isGoingOffline, setIsGoingOffline] = useState(false);
   const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
   const [promoteSuccess, setPromoteSuccess] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -140,6 +143,8 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const showMessagesRef = useRef(false);
+  const prevIncomingRef = useRef(0);
   const isOwnProfile = user && myProfile?.username === username;
 
   /* Dynamic Browser Tab Title (Visitor Case) */
@@ -169,24 +174,18 @@ export default function ProfilePage() {
     }
   }, [showSettings, profileData, myProfile]);
 
-  /* Online status tracking */
+  /* Online status tracking — set isOnline:true on mount, false on leave */
   useEffect(() => {
     if (!user || !isOwnProfile) return;
-
     const userRef = doc(db, 'users', user.uid);
-    const updateLastSeen = async () => {
-      try {
-        await updateDoc(userRef, {
-          lastSeen: serverTimestamp()
-        });
-      } catch (err) {
-        console.error('Error updating lastSeen:', err);
-      }
+    const goOnline = () => updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() }).catch(() => {});
+    const goOffline = () => updateDoc(userRef, { isOnline: false }).catch(() => {});
+    goOnline();
+    window.addEventListener('beforeunload', goOffline);
+    return () => {
+      window.removeEventListener('beforeunload', goOffline);
+      goOffline();
     };
-
-    updateLastSeen();
-    const interval = setInterval(updateLastSeen, 120000);
-    return () => clearInterval(interval);
   }, [user, isOwnProfile]);
 
   /* Online users state */
@@ -204,16 +203,15 @@ export default function ProfilePage() {
       }));
       setAllUsers(usersData);
 
-      // Filter for online users (active in last 5 minutes, opted-in to list)
-      const now = Date.now();
+      // Filter for online users (isOnline flag, opted-in to list)
       const online = usersData
-        .filter(u => u.lastSeen && (now - u.lastSeen.toMillis()) < 300000 && u.showInOnlineList !== false)
+        .filter(u => u.isOnline === true && u.showInOnlineList !== false)
         .sort((a, b) => {
-          // First sort by isPromoted
           if (a.isPromoted && !b.isPromoted) return -1;
           if (!a.isPromoted && b.isPromoted) return 1;
-          // Then sort by lastSeen
-          return b.lastSeen.toMillis() - a.lastSeen.toMillis();
+          const aMs = a.lastSeen?.toMillis?.() ?? 0;
+          const bMs = b.lastSeen?.toMillis?.() ?? 0;
+          return bMs - aMs;
         })
         .map(u => ({
           username: u.username || '',
@@ -254,26 +252,30 @@ export default function ProfilePage() {
   }, [searchCity, onlineUsers, allUsers]);
 
   /* Load top-5 popular users by today's Veils (3-day cooldown for #1) */
+  const lastLeaderFirstRef = useRef<string | null>(null);
   useEffect(() => {
     const usersRef = collection(db, 'users');
     const unsubscribe = onSnapshot(usersRef, (snap) => {
-      const now = Date.now();
+      const nowMs = Date.now();
       const today = new Date().toISOString().split('T')[0];
       const usersData = snap.docs.map(d => ({ uid: d.id, ...(d.data() as any) }));
-      const top5 = usersData
+      const eligible = usersData
         .filter(u => u.todayVeils?.date === today && (u.todayVeils?.count || 0) > 0)
         .filter(u => {
-          if (!u.lastFeaturedDate) return true;
-          const diff = Math.floor((now - new Date(u.lastFeaturedDate).getTime()) / 86400000);
-          return diff >= 3;
+          if (!u.blockedFromRankingUntil) return true;
+          const blockedMs = u.blockedFromRankingUntil?.toMillis?.() ?? new Date(u.blockedFromRankingUntil).getTime();
+          return nowMs > blockedMs;
         })
-        .sort((a, b) => (b.todayVeils?.count || 0) - (a.todayVeils?.count || 0))
-        .slice(0, 5);
+        .sort((a, b) => (b.todayVeils?.count || 0) - (a.todayVeils?.count || 0));
+      const top5 = eligible.slice(0, 5);
       setPopularUsers(top5);
-      // Mark #1 with lastFeaturedDate
+
+      // Mark #1 with blockedFromRankingUntil = now + 3 days (write only once per #1 change)
       const first = top5[0];
-      if (first && first.lastFeaturedDate !== today) {
-        updateDoc(doc(db, 'users', first.uid), { lastFeaturedDate: today }).catch(() => {});
+      if (first && first.uid !== lastLeaderFirstRef.current) {
+        lastLeaderFirstRef.current = first.uid;
+        const blockUntil = new Date(nowMs + 3 * 86400000);
+        updateDoc(doc(db, 'users', first.uid), { blockedFromRankingUntil: Timestamp.fromDate(blockUntil) }).catch(() => {});
       }
     });
     return () => unsubscribe();
@@ -293,7 +295,7 @@ export default function ProfilePage() {
             const uDoc = await getDoc(doc(db, 'users', uid));
             if (uDoc.exists()) {
               const d = uDoc.data();
-              return { uid, displayName: d.displayName || d.name || d.username || uid, username: d.username || '', profileImg: d.profileImg || '/images/default-avatar.svg', lastSeen: d.lastSeen };
+              return { uid, displayName: d.displayName || d.name || d.username || uid, username: d.username || '', profileImg: d.profileImg || '/images/default-avatar.svg', lastSeen: d.lastSeen, isOnline: d.isOnline === true };
             }
             return null;
           })
@@ -446,6 +448,7 @@ export default function ProfilePage() {
               totalConversations: docData.totalConversations || 0,
               welcomeSeen: docData.welcomeSeen !== false,
               lastSeen: docData.lastSeen || null,
+              isOnline: docData.isOnline === true,
             });
             setProfileNotFound(false);
           } else {
@@ -612,6 +615,13 @@ export default function ProfilePage() {
       // Left-chat messages now come from Firestore (written on visitor unmount)
       const finalMsgs = [...sessionMsgs].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
       
+      // Track unread using refs (avoid stale closure)
+      const incomingNew = finalMsgs.filter(m => m.senderUid !== user?.uid && !m.text.includes('heeft de chat verlaten'));
+      if (incomingNew.length > prevIncomingRef.current && !showMessagesRef.current) {
+        setUnreadCount(c => c + (incomingNew.length - prevIncomingRef.current));
+      }
+      prevIncomingRef.current = incomingNew.length;
+
       setMessages(finalMsgs);
       
       // Auto-select first conversation ONLY if there are current session messages
@@ -783,7 +793,7 @@ export default function ProfilePage() {
     return snap.docs[0].id;
   }
 
-  /* Give a veil to this profile */
+  /* Give a veil to this profile — atomic transaction */
   async function giveVeil(idx: number) {
     if (!user) { showToastMsg('Je moet ingelogd zijn om een Veil te geven.'); return; }
     if (isOwnProfile) { showToastMsg('Je kunt jezelf geen Veil geven.'); return; }
@@ -802,25 +812,38 @@ export default function ProfilePage() {
     const today = new Date().toISOString().split('T')[0];
     const veilRecordId = `${user.uid}_${profileData.uid}_${today}`;
     const veilRecordRef = doc(db, 'veilRecords', veilRecordId);
-    const field = `veil${idx + 1}`;
+    const profileRef = doc(db, 'users', profileData.uid);
+    const field = `veil${idx + 1}` as keyof ProfileData;
+
     try {
-      const profileRef = doc(db, 'users', profileData.uid);
-      const profileSnap = await getDoc(profileRef);
-      const currentData = profileSnap.data() || {};
-      const tv = currentData.todayVeils || {};
-      const newDailyCount = tv.date === today ? (tv.count || 0) + 1 : 1;
+      await runTransaction(db, async (tx) => {
+        const [recSnap, profSnap] = await Promise.all([tx.get(veilRecordRef), tx.get(profileRef)]);
 
-      await updateDoc(profileRef, {
-        [field]: increment(1),
-        'todayVeils.date': today,
-        'todayVeils.count': newDailyCount,
+        // Double-check anti-duplicate inside transaction
+        if (recSnap.exists() && recSnap.data()[`v${idx}`]) throw new Error('already_voted');
+
+        const profData = profSnap.data() || {};
+        const tv = profData.todayVeils || {};
+        const isNewDay = tv.date !== today;
+        const newDailyCount = isNewDay ? 1 : (tv.count || 0) + 1;
+
+        tx.set(veilRecordRef, { [`v${idx}`]: true, updatedAt: serverTimestamp() }, { merge: true });
+        tx.update(profileRef, {
+          [field]: increment(1),
+          'todayVeils.date': today,
+          'todayVeils.count': newDailyCount,
+        });
       });
-      await setDoc(veilRecordRef, { [`v${idx}`]: true, updatedAt: serverTimestamp() }, { merge: true });
 
-      setProfileData(prev => prev ? { ...prev, [field]: (prev[field as keyof ProfileData] as number) + 1 } : prev);
-      showToastMsg('Veil gegeven! 🎉');
-    } catch (error) {
-      console.error('Error giving veil:', error);
+      setProfileData(prev => prev ? { ...prev, [field]: (prev[field] as number) + 1 } : prev);
+      showToastMsg('Veil gegeven! ✓');
+    } catch (error: any) {
+      if (error?.message === 'already_voted') {
+        showToastMsg('Je hebt dit Veil vandaag al gegeven.');
+      } else {
+        console.error('Error giving veil:', error);
+        showToastMsg('Er ging iets mis. Probeer het opnieuw.');
+      }
     }
   }
 
@@ -1210,8 +1233,7 @@ export default function ProfilePage() {
   const city = (profileData as any)?.city || '';
 
   const profileLastSeen = profileData?.lastSeen;
-  const lastSeenMs = profileLastSeen?.toDate ? profileLastSeen.toDate().getTime() : (profileLastSeen ? new Date(profileLastSeen).getTime() : 0);
-  const isProfileOffline = !isOwnProfile && (!lastSeenMs || (now - lastSeenMs) >= 5 * 60 * 1000);
+  const isProfileOffline = !isOwnProfile && profileData?.isOnline !== true;
 
   const veils = [
     profileData?.veil1 || 0,
@@ -1282,9 +1304,23 @@ export default function ProfilePage() {
                   </li>
                 )}
                 <li>
-                  <a onClick={logout} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
+                  <a onClick={async () => {
+                    if (user) await updateDoc(doc(db, 'users', user.uid), { isOnline: false }).catch(() => {});
+                    await logout();
+                  }} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
                     <img src="/images/icon-logout.svg" alt="" />
                     Uitloggen
+                  </a>
+                </li>
+                <li>
+                  <a onClick={async () => {
+                    if (!user) return;
+                    const next = isGoingOffline ? true : false;
+                    setIsGoingOffline(!isGoingOffline);
+                    await updateDoc(doc(db, 'users', user.uid), { isOnline: !isGoingOffline });
+                  }} className={`nav-btn nav-status-toggle${isGoingOffline ? ' offline-mode' : ''}`} style={{ cursor: 'pointer' }} title={isGoingOffline ? 'Ga online' : 'Ga offline'}>
+                    <span className={`status-dot-nav${isGoingOffline ? '' : ' online'}`} />
+                    {isGoingOffline ? 'Ga Online' : 'Ga Offline'}
                   </a>
                 </li>
                 <li>
@@ -1294,9 +1330,10 @@ export default function ProfilePage() {
                   </a>
                 </li>
                 <li>
-                  <a className="nav-btn nav-messages" onClick={() => setShowMessages(true)} style={{ cursor: 'pointer' }}>
+                  <a className="nav-btn nav-messages" onClick={() => { setShowMessages(true); showMessagesRef.current = true; setUnreadCount(0); }} style={{ cursor: 'pointer' }}>
                     <img src="/images/icon-messages.svg" alt="" />
                     Berichten
+                    {unreadCount > 0 && <span className="berichten-badge">{unreadCount}</span>}
                   </a>
                 </li>
                 <li>
@@ -1382,7 +1419,7 @@ export default function ProfilePage() {
 
       {/* ═══════ BERICHTEN MODAL ═══════ */}
       {showMessages && (
-        <div className="modal-overlay" onClick={() => setShowMessages(false)}>
+        <div className="modal-overlay" onClick={() => { setShowMessages(false); showMessagesRef.current = false; }}>
           <div className="modal-messages" onClick={(e) => e.stopPropagation()}>
             <div className="modal-messages-head">
               <img src="/images/icon-messages.svg" alt="" className="modal-messages-icon" />
@@ -1397,7 +1434,7 @@ export default function ProfilePage() {
                   setSelectedConversations(new Set());
                 }} style={{ cursor: 'pointer' }}>Selectie verwijderen</a>
               </div>
-              <a className="modal-close" onClick={() => setShowMessages(false)}>✕</a>
+              <a className="modal-close" onClick={() => { setShowMessages(false); showMessagesRef.current = false; }}>✕</a>
             </div>
             <div className="modal-messages-body">
               {activeOffConv ? (
@@ -1611,7 +1648,7 @@ export default function ProfilePage() {
               ) : (
                 <ul>
                   {followingList.map((u: any) => {
-                    const isOnline = u.lastSeen && (Date.now() - new Date(u.lastSeen).getTime()) < 5 * 60 * 1000;
+                    const isOnline = u.isOnline === true;
                     return (
                     <li key={u.uid} className="modal-following-item">
                       <Link href={`/${u.username}`} target="_blank" rel="noopener noreferrer" onClick={() => setShowFollowing(false)}>
