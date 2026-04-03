@@ -1146,7 +1146,7 @@ export default function ProfilePage() {
   /* Online list items */
   const onlineListItems = filteredOnlineUsers.map((u, i) => (
     <li key={u.username || i} className="online-item">
-      <Link href={`/${u.username}`}>
+      <Link href={`/${u.username}`} target="_blank" rel="noopener noreferrer">
         <img src={u.img} alt={u.alt} />
       </Link>
       <div className="online-tooltip">
