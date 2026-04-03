@@ -704,9 +704,11 @@
 /* --- Conversation count label in about box --- */
 .conv-count-label {
   display: inline;
+  float: none;
   font-size: 13px;
   font-weight: 400;
   color: #555;
+  margin: 0;
 }
 
 /* --- Visitor/Guest veil buttons: square green tiles (veil.png) --- */
@@ -724,18 +726,19 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #2a5a2a;
-  border-radius: 4px;
+  background: #98A824;
+  border-radius: 3px;
   padding: 8px 4px 6px;
   gap: 4px;
   cursor: pointer;
 }
 
-.visitor-veil-tile:hover { background: #3a7a3a; }
+.visitor-veil-tile:hover { background: #7E8C1E; }
 
 .visitor-veil-tile img {
   width: 22px;
   height: 22px;
+  filter: brightness(10);
 }
 
 .visitor-veil-tile span {
@@ -2315,16 +2318,19 @@
   justify-content: flex-start;
   gap: 7px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: 4px;
   font-size: 13px;
   font-weight: 700;
   color: #fff;
   text-decoration: none;
   border: none;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
   letter-spacing: 0.02em;
   text-align: left;
+  box-sizing: border-box;
+  min-height: 38px;
 }
 
 .visitor-btn-profile {

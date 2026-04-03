@@ -100,6 +100,7 @@ export default function ProfilePage() {
   const [popularUsers, setPopularUsers] = useState<any[]>([]);
   const [followingList, setFollowingList] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
   const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
   const [promoteSuccess, setPromoteSuccess] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -308,6 +309,16 @@ export default function ProfilePage() {
     });
     return () => unsubscribe();
   }, [user, isOwnProfile, profileData?.uid]);
+
+  /* Real-time follower count: count users whose following[] contains this profile uid */
+  useEffect(() => {
+    if (!profileData?.uid) return;
+    const q = query(collection(db, 'users'), where('following', 'array-contains', profileData.uid));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setFollowerCount(snap.size);
+    });
+    return () => unsubscribe();
+  }, [profileData?.uid]);
 
   /* Load today's veil records for this profile (visitor only) */
   useEffect(() => {
@@ -986,14 +997,11 @@ export default function ProfilePage() {
     if (!user || !profileData?.uid || isOwnProfile) return;
     try {
       const userRef = doc(db, 'users', user.uid);
-      const profileRef = doc(db, 'users', profileData.uid);
       if (isFollowing) {
         await updateDoc(userRef, { following: arrayRemove(profileData.uid) });
-        await updateDoc(profileRef, { followers: increment(-1) });
         setIsFollowing(false);
       } else {
         await updateDoc(userRef, { following: arrayUnion(profileData.uid) });
-        await updateDoc(profileRef, { followers: increment(1) });
         setIsFollowing(true);
       }
     } catch (error) {
@@ -1132,7 +1140,7 @@ export default function ProfilePage() {
   /* Use profileData if available, otherwise fall back to URL username */
   const displayName = profileData?.displayName || username;
   const bio = profileData?.bio || '';
-  const followers = profileData?.followers || 0;
+  const followers = followerCount;
   const profileImg = profileData?.profileImg || '/images/default-avatar.svg';
   const city = (profileData as any)?.city || '';
 
@@ -1513,7 +1521,6 @@ export default function ProfilePage() {
                       <a className="modal-following-unfollow" onClick={async () => {
                         if (!user) return;
                         await updateDoc(doc(db, 'users', user.uid), { following: arrayRemove(u.uid) });
-                        await updateDoc(doc(db, 'users', u.uid), { followers: increment(-1) });
                       }} style={{ cursor: 'pointer' }}>✕</a>
                     </li>
                     );
