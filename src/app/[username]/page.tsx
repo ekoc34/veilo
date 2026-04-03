@@ -284,7 +284,7 @@ export default function ProfilePage() {
             const uDoc = await getDoc(doc(db, 'users', uid));
             if (uDoc.exists()) {
               const d = uDoc.data();
-              return { uid, displayName: d.displayName || d.name || d.username || uid, username: d.username || '', profileImg: d.profileImg || '/images/default-avatar.svg' };
+              return { uid, displayName: d.displayName || d.name || d.username || uid, username: d.username || '', profileImg: d.profileImg || '/images/default-avatar.svg', lastSeen: d.lastSeen };
             }
             return null;
           })
@@ -1496,19 +1496,28 @@ export default function ProfilePage() {
                 <div className="modal-following-empty">Je volgt nog niemand.</div>
               ) : (
                 <ul>
-                  {followingList.map((u: any) => (
+                  {followingList.map((u: any) => {
+                    const isOnline = u.lastSeen && (Date.now() - new Date(u.lastSeen).getTime()) < 5 * 60 * 1000;
+                    return (
                     <li key={u.uid} className="modal-following-item">
-                      <Link href={`/${u.username}`} onClick={() => setShowFollowing(false)}>
+                      <Link href={`/${u.username}`} target="_blank" rel="noopener noreferrer" onClick={() => setShowFollowing(false)}>
                         <img src={u.profileImg || '/images/default-avatar.svg'} alt="" />
-                        <strong>{u.displayName || u.username}</strong>
+                        <div className="modal-following-info">
+                          <strong>{u.displayName || u.username}</strong>
+                          <span className={`modal-following-status${isOnline ? ' online' : ''}`}>
+                            <span className="modal-following-dot" />
+                            {isOnline ? 'Online' : 'Offline'}
+                          </span>
+                        </div>
                       </Link>
                       <a className="modal-following-unfollow" onClick={async () => {
                         if (!user) return;
                         await updateDoc(doc(db, 'users', user.uid), { following: arrayRemove(u.uid) });
                         await updateDoc(doc(db, 'users', u.uid), { followers: increment(-1) });
-                      }} style={{ cursor: 'pointer' }}>Ontvolgen</a>
+                      }} style={{ cursor: 'pointer' }}>✕</a>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </div>

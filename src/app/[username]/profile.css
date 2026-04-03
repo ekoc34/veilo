@@ -1733,7 +1733,34 @@
   align-items: center;
   gap: 10px;
   flex: 1;
+  text-decoration: none;
 }
+
+.modal-following-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-following-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #999;
+}
+
+.modal-following-status.online { color: #22aa55; }
+
+.modal-following-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #999;
+  flex-shrink: 0;
+}
+
+.modal-following-status.online .modal-following-dot { background: #22aa55; }
 
 .modal-following-item img {
   width: 36px;
@@ -1748,13 +1775,14 @@
 }
 
 .modal-following-unfollow {
-  font-size: 12px;
-  color: #28A0C8;
-  font-weight: 600;
+  font-size: 16px;
+  color: #aaa;
+  font-weight: 400;
   white-space: nowrap;
+  line-height: 1;
 }
 
-.modal-following-unfollow:hover { text-decoration: underline; }
+.modal-following-unfollow:hover { color: #c0392b; }
 
 .modal-following-empty {
   padding: 20px;
