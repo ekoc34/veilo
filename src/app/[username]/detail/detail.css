@@ -27,15 +27,13 @@
   padding: 28px 32px 24px;
 }
 
-.detail-logo a { text-decoration: none; }
-
-.detail-logo-text {
-  font-size: 36px;
-  font-weight: 900;
-  color: #28A0C8;
-  letter-spacing: -1px;
-  font-family: Arial, sans-serif;
-  text-transform: lowercase;
+.detail-logo a {
+  display: block;
+  width: 108px;
+  height: 35px;
+  text-indent: -99999px;
+  background: url('/images/veilo-logo.svg') no-repeat;
+  background-size: contain;
 }
 
 /* Content area */
@@ -44,6 +42,8 @@
   align-items: flex-start;
   gap: 28px;
   padding: 0 32px;
+  max-width: 700px;
+  margin: 0 auto;
 }
 
 /* Left column */
@@ -70,10 +70,10 @@
   margin-top: 10px;
   font-size: 13px;
   color: #5bb8d4;
-  text-decoration: underline;
+  text-decoration: none;
 }
 
-.detail-report-link:hover { color: #7dd0e8; }
+.detail-report-link:hover { color: #7dd0e8; text-decoration: underline; }
 
 /* Report reasons */
 .detail-report-reasons {
@@ -90,11 +90,11 @@
   display: block;
   font-size: 13px;
   color: #5bb8d4;
-  text-decoration: underline;
+  text-decoration: none;
   margin-bottom: 4px;
 }
 
-.detail-report-reason:hover { color: #7dd0e8; }
+.detail-report-reason:hover { color: #7dd0e8; text-decoration: underline; }
 
 /* Right column */
 .detail-right {

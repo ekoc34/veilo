@@ -1539,8 +1539,8 @@ export default function ProfilePage() {
             className="profile_img"
             onMouseEnter={() => isOwnProfile && setShowProfilePicChange(true)}
             onMouseLeave={() => setShowProfilePicChange(false)}
-            onClick={isOwnProfile ? triggerProfilePicChange : undefined}
-            style={{ cursor: isOwnProfile ? 'pointer' : 'default' }}
+            onClick={isOwnProfile ? triggerProfilePicChange : () => window.open(`/${username}/detail`, '_blank')}
+            style={{ cursor: 'pointer' }}
           >
             <img
               key={selectedProfilePic || profileImg}
@@ -1588,7 +1588,7 @@ export default function ProfilePage() {
                 Naar Profiel
               </a>
               <button onClick={handleFollow} className={`visitor-btn visitor-btn-follow${isFollowing ? ' visitor-btn-unfollow' : ''}`}>
-                {isFollowing ? '− Ontvolgen' : '+ Volgen'}
+                {isFollowing ? '✕ Ontvolgen' : '+ Volgen'}
               </button>
             </div>
           )}

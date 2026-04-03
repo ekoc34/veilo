@@ -2248,10 +2248,10 @@
 .visitor-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 7px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 8px 12px;
   border-radius: 4px;
   font-size: 13px;
   font-weight: 700;
@@ -2260,7 +2260,7 @@
   border: none;
   cursor: pointer;
   letter-spacing: 0.02em;
-  text-align: center;
+  text-align: left;
 }
 
 .visitor-btn-profile {
