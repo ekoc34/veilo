@@ -111,7 +111,7 @@ export default function ProfilePage() {
   const [activeOffConv, setActiveOffConv] = useState<any>(null);
   const [offReplyText, setOffReplyText] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isGoingOffline, setIsGoingOffline] = useState(false);
+  const [profilePicCacheBust, setProfilePicCacheBust] = useState(0);
   const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
   const [promoteSuccess, setPromoteSuccess] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -887,45 +887,38 @@ export default function ProfilePage() {
 
   async function handleProfilePicChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (file && isOwnProfile && profileData?.uid) {
-      try {
-        // Create preview URL for immediate display
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          setSelectedProfilePic(result);
-        };
-        reader.readAsDataURL(file);
+    if (!file || !isOwnProfile || !profileData?.uid || !user) return;
+    try {
+      // Show preview immediately while uploading
+      const reader = new FileReader();
+      reader.onload = (e) => setSelectedProfilePic(e.target?.result as string);
+      reader.readAsDataURL(file);
 
-        // Upload to Firebase Storage
-        const storagePath = `profile-pictures/${profileData.uid}_${Date.now()}`;
-        const storageReference = storageRef(storage, storagePath);
-        
-        await uploadBytes(storageReference, file);
-        const downloadURL = await getDownloadURL(storageReference);
-        
-        if (user) {
-          try {
-            await updateDoc(doc(db, 'users', user.uid), {
-              profileImg: downloadURL,
-              updatedAt: serverTimestamp()
-            });
-          } catch {
-            await setDoc(doc(db, 'users', user.uid), {
-              profileImg: downloadURL,
-              updatedAt: serverTimestamp()
-            }, { merge: true });
-          }
-        }
+      // Fixed path per user — overwrites old file, avoids storage bloat
+      const ext = file.name.split('.').pop() || 'jpg';
+      const storagePath = `profile-pictures/${profileData.uid}.${ext}`;
+      const storageReference = storageRef(storage, storagePath);
 
-        // Update local state for immediate feedback
-        setProfileData(prev => prev ? { ...prev, profileImg: downloadURL } : prev);
-        
-        // Clear local preview after successful upload
-        setSelectedProfilePic(null);
-      } catch (error) {
-        console.error('Error in handleProfilePicChange:', error);
-      }
+      await uploadBytes(storageReference, file);
+      const downloadURL = await getDownloadURL(storageReference);
+
+      // Add cache-bust so browsers don't serve the old cached image
+      const bustedURL = downloadURL.includes('?')
+        ? `${downloadURL}&cb=${Date.now()}`
+        : `${downloadURL}?cb=${Date.now()}`;
+
+      await setDoc(doc(db, 'users', user.uid), {
+        profileImg: bustedURL,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Update local state + force re-render of img
+      setProfileData(prev => prev ? { ...prev, profileImg: bustedURL } : prev);
+      setSelectedProfilePic(null);
+      setProfilePicCacheBust(n => n + 1);
+    } catch (error) {
+      console.error('Error in handleProfilePicChange:', error);
+      setSelectedProfilePic(null);
     }
   }
 
@@ -1100,42 +1093,49 @@ export default function ProfilePage() {
   async function handlePhotoSend(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !profileData?.uid) return;
-    if (!isOwnProfile && profileData.allowPhotos === false) {
-      setShowPhotoAlert(true);
-      if (photoInputRef.current) photoInputRef.current.value = '';
-      return;
-    }
-    if (!isOwnProfile && !chatStartTime.current) {
-      setShowPhotoAlert(true);
-      if (photoInputRef.current) photoInputRef.current.value = '';
-      return;
-    }
+
+    const reset = () => { if (photoInputRef.current) photoInputRef.current.value = ''; };
+
     if (!isOwnProfile && isVisitorBlocked) {
       showToastMsg('Je bent geblokkeerd en kunt geen foto\'s sturen.');
-      if (photoInputRef.current) photoInputRef.current.value = '';
-      return;
+      reset(); return;
     }
+    if (!isOwnProfile && profileData.allowPhotos === false) {
+      setShowPhotoAlert(true);
+      reset(); return;
+    }
+    if (!isOwnProfile && visitorChatClosed) {
+      showToastMsg('Chat is gesloten.');
+      reset(); return;
+    }
+
     try {
+      const anonId = getAnonId();
+      // Start chat timer if this is the first interaction
+      if (!isOwnProfile && !chatStartTime.current) chatStartTime.current = Date.now();
+
       const storagePath = `chat-photos/${profileData.uid}_${Date.now()}`;
       const storageReference = storageRef(storage, storagePath);
       await uploadBytes(storageReference, file);
       const downloadURL = await getDownloadURL(storageReference);
-      const anonId = getAnonId();
-      if (!isOwnProfile && !chatStartTime.current) chatStartTime.current = Date.now();
+
       const senderName = isOwnProfile
         ? (myProfile?.username || 'Eigenaar')
-        : (user && revealIdentity ? (myProfile?.name || username) : anonId);
+        : (user && revealIdentity ? (myProfile?.name || myProfile?.username || username) : anonId);
+
       await addDoc(collection(db, 'chats', profileData.uid, 'messages'), {
         sender: senderName,
         senderUid: isOwnProfile ? user?.uid : (user?.uid || anonId),
         recipientUid: isOwnProfile ? activeConversation : undefined,
-        text: '[Foto]',
+        text: '',
         photoUrl: downloadURL,
         createdAt: serverTimestamp(),
       });
-      if (photoInputRef.current) photoInputRef.current.value = '';
+      reset();
     } catch (error) {
       console.error('Error sending photo:', error);
+      showToastMsg('Foto versturen mislukt. Probeer opnieuw.');
+      reset();
     }
   }
 
@@ -1310,17 +1310,6 @@ export default function ProfilePage() {
                   }} className="nav-btn nav-logout" style={{ cursor: 'pointer' }}>
                     <img src="/images/icon-logout.svg" alt="" />
                     Uitloggen
-                  </a>
-                </li>
-                <li>
-                  <a onClick={async () => {
-                    if (!user) return;
-                    const next = isGoingOffline ? true : false;
-                    setIsGoingOffline(!isGoingOffline);
-                    await updateDoc(doc(db, 'users', user.uid), { isOnline: !isGoingOffline });
-                  }} className={`nav-btn nav-status-toggle${isGoingOffline ? ' offline-mode' : ''}`} style={{ cursor: 'pointer' }} title={isGoingOffline ? 'Ga online' : 'Ga offline'}>
-                    <span className={`status-dot-nav${isGoingOffline ? '' : ' online'}`} />
-                    {isGoingOffline ? 'Ga Online' : 'Ga Offline'}
                   </a>
                 </li>
                 <li>
@@ -1702,7 +1691,7 @@ export default function ProfilePage() {
             style={{ cursor: 'pointer' }}
           >
             <img
-              key={selectedProfilePic || profileImg}
+              key={selectedProfilePic || `${profileImg}-${profilePicCacheBust}`}
               src={selectedProfilePic || profileImg}
               alt={`${displayName} profielfoto`}
             />
