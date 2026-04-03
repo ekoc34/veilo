@@ -1,0 +1,175 @@
+/* ══════════════════════════════════
+   Detail Page – /{username}/detail
+   ══════════════════════════════════ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+.detail-body {
+  background: #111;
+  min-height: 100vh;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  padding: 0 0 60px;
+}
+
+.detail-loading {
+  background: #111;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+/* Logo */
+.detail-logo {
+  padding: 28px 32px 24px;
+}
+
+.detail-logo a { text-decoration: none; }
+
+.detail-logo-text {
+  font-size: 36px;
+  font-weight: 900;
+  color: #28A0C8;
+  letter-spacing: -1px;
+  font-family: Arial, sans-serif;
+  text-transform: lowercase;
+}
+
+/* Content area */
+.detail-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  padding: 0 32px;
+}
+
+/* Left column */
+.detail-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.detail-avatar {
+  width: 160px;
+  height: 170px;
+  object-fit: cover;
+  display: block;
+  border: none;
+  transition: opacity 0.15s;
+}
+
+.detail-avatar:hover { opacity: 0.85; }
+
+.detail-report-link {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #5bb8d4;
+  text-decoration: underline;
+}
+
+.detail-report-link:hover { color: #7dd0e8; }
+
+/* Report reasons */
+.detail-report-reasons {
+  margin-top: 10px;
+}
+
+.detail-report-title {
+  font-size: 13px;
+  color: #ccc;
+  margin-bottom: 6px;
+}
+
+.detail-report-reason {
+  display: block;
+  font-size: 13px;
+  color: #5bb8d4;
+  text-decoration: underline;
+  margin-bottom: 4px;
+}
+
+.detail-report-reason:hover { color: #7dd0e8; }
+
+/* Right column */
+.detail-right {
+  padding-top: 4px;
+}
+
+.detail-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.detail-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.detail-city {
+  font-size: 14px;
+  color: #aaa;
+}
+
+.detail-bio {
+  font-size: 14px;
+  color: #ccc;
+  line-height: 1.55;
+}
+
+/* Report confirmed dialog */
+.detail-report-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.45);
+  z-index: 999;
+}
+
+.detail-report-dialog {
+  background: #2a2a2a;
+  border-radius: 10px;
+  padding: 22px 28px 18px;
+  min-width: 280px;
+  max-width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.detail-report-dialog-header {
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-report-dialog p {
+  font-size: 15px;
+  color: #fff;
+  margin-bottom: 18px;
+}
+
+.detail-report-dialog button {
+  float: right;
+  background: #28A0C8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detail-report-dialog button:hover { background: #1e8aab; }

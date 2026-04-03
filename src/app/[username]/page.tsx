@@ -1581,16 +1581,22 @@ export default function ProfilePage() {
             onChange={handlePhotoSend}
             style={{ display: 'none' }}
           />
+          {!isOwnProfile && user && (
+            <div className="visitor-action-btns">
+              <a className="visitor-btn visitor-btn-profile" href={`/${username}/detail`} target="_blank" rel="noopener noreferrer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+                Naar Profiel
+              </a>
+              <button onClick={handleFollow} className={`visitor-btn visitor-btn-follow${isFollowing ? ' visitor-btn-unfollow' : ''}`}>
+                {isFollowing ? '− Ontvolgen' : '+ Volgen'}
+              </button>
+            </div>
+          )}
           <div className="left_follow_box">
             <div>
               <h4>Volgers</h4>
               <h5>{followers}</h5>
             </div>
-            {!isOwnProfile && user && profileData && (
-              <button onClick={handleFollow} className={`follow-btn${isFollowing ? ' following' : ''}`}>
-                {isFollowing ? 'Ontvolgen' : 'Volgen'}
-              </button>
-            )}
           </div>
 
           {/* Veils */}

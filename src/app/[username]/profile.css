@@ -2232,3 +2232,54 @@
   line-height: 1.55;
   margin: 0;
 }
+
+/* ══════════════════════════════════════
+   VISITOR ACTION BUTTONS (Naar Profiel + Volgen)
+   ══════════════════════════════════════ */
+
+.visitor-action-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.visitor-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.visitor-btn-profile {
+  background: #28A0C8;
+  border-bottom: 2px solid #1e8aab;
+}
+
+.visitor-btn-profile:hover { opacity: 0.88; color: #fff; }
+
+.visitor-btn-follow {
+  background: #308362;
+  border-bottom: 2px solid #24664B;
+}
+
+.visitor-btn-follow:hover { opacity: 0.88; }
+
+.visitor-btn-unfollow {
+  background: #B71D4A;
+  border-bottom: 2px solid #9A1840;
+}
+
+.visitor-btn-unfollow:hover { opacity: 0.88; }
